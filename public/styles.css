@@ -1,14 +1,14 @@
 :root {
-  --ink: #16211f;
-  --muted: #61706b;
-  --paper: #fffdfa;
-  --line: #d8ded9;
-  --green: #08785f;
-  --green-2: #10a27c;
-  --teal: #1a7a8f;
-  --amber: #b56b14;
-  --red: #b42332;
-  --shadow: 0 28px 80px rgba(19, 37, 31, 0.16);
+  color-scheme: dark;
+  --bg: #111318;
+  --panel: #1b2028;
+  --panel-2: #222936;
+  --text: #f4f7fb;
+  --muted: #9ca8b7;
+  --line: #303948;
+  --accent: #18c29c;
+  --accent-2: #f5b84b;
+  --danger: #ff6b6b;
 }
 
 * {
@@ -18,237 +18,238 @@
 body {
   margin: 0;
   min-height: 100vh;
-  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background:
-    linear-gradient(135deg, rgba(8, 120, 95, 0.12), transparent 38%),
-    linear-gradient(225deg, rgba(26, 122, 143, 0.14), transparent 36%),
-    #f4f2ed;
-  font-family: Inter, Segoe UI, Arial, sans-serif;
+    linear-gradient(180deg, rgba(24, 194, 156, 0.08), transparent 42%),
+    var(--bg);
+  color: var(--text);
 }
 
-button {
-  font: inherit;
-}
-
-.page {
-  display: grid;
+.shell {
   min-height: 100vh;
-  place-items: center;
-  padding: 22px;
-}
-
-.assistant {
-  position: relative;
   display: grid;
-  width: min(500px, 100%);
-  min-height: min(690px, calc(100vh - 44px));
   place-items: center;
-  align-content: center;
-  gap: 22px;
-  overflow: hidden;
-  border: 1px solid rgba(216, 222, 217, 0.9);
-  border-radius: 30px;
-  background: rgba(255, 253, 250, 0.88);
-  box-shadow: var(--shadow);
+  padding: 24px;
 }
 
-.brand {
-  position: absolute;
-  top: 26px;
-  left: 26px;
+.panel {
+  width: min(440px, 100%);
+  min-height: 620px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 24px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+}
+
+.topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
-.brand-mark {
-  display: grid;
+.mark {
   width: 44px;
   height: 44px;
+  display: grid;
   place-items: center;
-  border-radius: 12px;
-  color: white;
-  background: linear-gradient(145deg, var(--green), var(--teal));
+  border-radius: 8px;
+  background: var(--accent);
+  color: #06241d;
   font-weight: 800;
 }
 
-h1,
+h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
 p {
   margin: 0;
 }
 
-h1 {
-  font-size: 24px;
-  letter-spacing: 0;
-  line-height: 1;
-}
-
-.brand p {
-  margin-top: 3px;
+.topbar p,
+.hint {
   color: var(--muted);
-  font-size: 13px;
 }
 
-.orb-wrap {
-  position: absolute;
-  inset: 0;
+.stage {
   display: grid;
   place-items: center;
-  pointer-events: none;
-}
-
-.orb {
-  position: relative;
-  width: 250px;
-  height: 250px;
-}
-
-.orb span {
-  position: absolute;
-  inset: 0;
-  border: 1px solid rgba(8, 120, 95, 0.22);
-  border-radius: 50%;
-  opacity: 0;
-}
-
-.assistant.listening .orb span,
-.assistant.thinking .orb span,
-.assistant.speaking .orb span {
-  animation: pulse 2s ease-out infinite;
-}
-
-.orb span:nth-child(2) {
-  animation-delay: 0.34s;
-}
-
-.orb span:nth-child(3) {
-  animation-delay: 0.68s;
+  align-content: center;
+  gap: 18px;
+  text-align: center;
 }
 
 .mic-button {
   position: relative;
+  width: 156px;
+  height: 156px;
   display: grid;
-  width: 170px;
-  height: 170px;
   place-items: center;
-  border: 0;
+  border: 1px solid rgba(24, 194, 156, 0.46);
   border-radius: 50%;
-  color: white;
-  background: linear-gradient(145deg, var(--green), var(--green-2));
-  box-shadow: 0 24px 48px rgba(8, 120, 95, 0.32);
+  background: #141922;
+  color: var(--text);
   cursor: pointer;
-  transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  box-shadow: inset 0 0 0 10px rgba(24, 194, 156, 0.07);
 }
 
-.mic-button:hover {
-  transform: translateY(-2px);
+.mic-button:focus-visible {
+  outline: 3px solid var(--accent-2);
+  outline-offset: 5px;
 }
 
-.mic-button:active {
-  transform: scale(0.98);
+.pulse {
+  position: absolute;
+  inset: 16px;
+  border-radius: 50%;
+  background: rgba(24, 194, 156, 0.1);
 }
 
-.assistant.listening .mic-button {
-  background: linear-gradient(145deg, var(--teal), var(--green));
-}
-
-.assistant.thinking .mic-button {
-  background: linear-gradient(145deg, var(--amber), var(--green));
-}
-
-.assistant.error .mic-button {
-  background: linear-gradient(145deg, var(--red), #80353b);
-}
-
-.mic-icon {
+.mic-shape {
   position: relative;
-  display: block;
-  width: 46px;
-  height: 76px;
-  border: 6px solid currentColor;
-  border-radius: 28px;
+  width: 38px;
+  height: 58px;
+  border: 4px solid currentColor;
+  border-radius: 24px;
 }
 
-.mic-icon::before {
+.mic-shape::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -22px;
+  width: 4px;
+  height: 20px;
+  transform: translateX(-50%);
+  background: currentColor;
+}
+
+.mic-shape::after {
   content: "";
   position: absolute;
   left: 50%;
   bottom: -30px;
-  width: 6px;
-  height: 24px;
-  border-radius: 999px;
-  background: currentColor;
+  width: 34px;
+  height: 4px;
   transform: translateX(-50%);
-}
-
-.mic-icon::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -40px;
-  width: 48px;
-  height: 6px;
-  border-radius: 999px;
   background: currentColor;
-  transform: translateX(-50%);
+  border-radius: 4px;
 }
 
 .status {
-  min-height: 32px;
-  color: var(--ink);
-  font-size: 23px;
-  font-weight: 800;
-  text-align: center;
+  min-height: 34px;
+  font-size: 1.45rem;
+  font-weight: 720;
+  line-height: 1.2;
 }
 
 .hint {
-  max-width: 310px;
-  min-height: 42px;
-  color: var(--muted);
-  font-size: 14px;
+  min-height: 48px;
+  max-width: 300px;
   line-height: 1.45;
-  text-align: center;
 }
 
-.controls {
-  position: absolute;
-  bottom: 28px;
+.meter {
+  height: 48px;
+  display: flex;
+  justify-content: center;
+  align-items: end;
+  gap: 8px;
 }
 
-.secondary {
-  min-width: 88px;
-  min-height: 40px;
-  border: 1px solid var(--line);
+.meter span {
+  width: 10px;
+  height: 16px;
   border-radius: 999px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.72);
-  cursor: pointer;
+  background: var(--line);
+  transition: height 160ms ease, background 160ms ease;
 }
 
-@keyframes pulse {
-  0% {
-    opacity: 0.62;
-    transform: scale(0.62);
-  }
+body[data-mode="listening"] .meter span,
+body[data-mode="speaking"] .meter span {
+  background: var(--accent);
+  animation: level 800ms ease-in-out infinite;
+}
+
+body[data-mode="listening"] .pulse,
+body[data-mode="speaking"] .pulse {
+  animation: breathe 1100ms ease-in-out infinite;
+}
+
+body[data-mode="thinking"] .meter span,
+body[data-mode="connecting"] .meter span {
+  background: var(--accent-2);
+}
+
+body[data-mode="error"] .mic-button {
+  border-color: rgba(255, 107, 107, 0.7);
+}
+
+body[data-mode="error"] .meter span {
+  background: var(--danger);
+}
+
+.meter span:nth-child(2) {
+  animation-delay: 90ms;
+}
+
+.meter span:nth-child(3) {
+  animation-delay: 180ms;
+}
+
+.meter span:nth-child(4) {
+  animation-delay: 270ms;
+}
+
+.meter span:nth-child(5) {
+  animation-delay: 360ms;
+}
+
+audio {
+  display: none;
+}
+
+@keyframes breathe {
+  0%,
   100% {
-    opacity: 0;
-    transform: scale(1.5);
+    transform: scale(0.92);
+    opacity: 0.68;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
   }
 }
 
-@media (max-width: 560px) {
-  .page {
-    padding: 0;
+@keyframes level {
+  0%,
+  100% {
+    height: 14px;
+  }
+  50% {
+    height: 42px;
+  }
+}
+
+@media (max-width: 520px) {
+  .shell {
+    padding: 12px;
   }
 
-  .assistant {
-    min-height: 100vh;
-    border: 0;
-    border-radius: 0;
+  .panel {
+    min-height: calc(100vh - 24px);
+    padding: 20px;
   }
 
-  .brand {
-    top: 22px;
-    left: 22px;
+  .mic-button {
+    width: 138px;
+    height: 138px;
   }
 }

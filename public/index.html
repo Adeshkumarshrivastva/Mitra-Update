@@ -7,34 +7,34 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <main class="page">
-      <section class="assistant" aria-label="MITRA voice assistant">
-        <header class="brand">
-          <div class="brand-mark">Mi</div>
+    <main class="shell">
+      <section class="panel" aria-label="MITRA voice assistant">
+        <header class="topbar">
+          <div class="mark" aria-hidden="true">M</div>
           <div>
             <h1>MITRA</h1>
-            <p>Aapka apna saathi</p>
+            <p>Highway voice companion</p>
           </div>
         </header>
 
-        <div class="orb-wrap" aria-hidden="true">
-          <div id="orb" class="orb">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
+        <div class="stage" aria-live="polite">
+          <button id="micButton" class="mic-button" type="button" aria-label="Talk to MITRA">
+            <span class="pulse" aria-hidden="true"></span>
+            <span class="mic-shape" aria-hidden="true"></span>
+          </button>
+          <p id="statusText" class="status">Tap to speak</p>
+          <p id="hintText" class="hint">MITRA will listen for a short turn and reply by voice.</p>
         </div>
 
-        <button id="micButton" class="mic-button" type="button" aria-label="Speak to MITRA">
-          <span class="mic-icon"></span>
-        </button>
-
-        <p id="statusText" class="status">Checking MITRA</p>
-        <p id="hintText" class="hint">Allow microphone access when the browser asks.</p>
-
-        <div class="controls">
-          <button id="stopButton" class="secondary" type="button">Stop</button>
+        <div class="meter" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
         </div>
+
+        <audio id="remoteAudio" autoplay playsinline></audio>
       </section>
     </main>
 
