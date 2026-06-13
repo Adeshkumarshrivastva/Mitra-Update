@@ -1,0 +1,254 @@
+:root {
+  --ink: #16211f;
+  --muted: #61706b;
+  --paper: #fffdfa;
+  --line: #d8ded9;
+  --green: #08785f;
+  --green-2: #10a27c;
+  --teal: #1a7a8f;
+  --amber: #b56b14;
+  --red: #b42332;
+  --shadow: 0 28px 80px rgba(19, 37, 31, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    linear-gradient(135deg, rgba(8, 120, 95, 0.12), transparent 38%),
+    linear-gradient(225deg, rgba(26, 122, 143, 0.14), transparent 36%),
+    #f4f2ed;
+  font-family: Inter, Segoe UI, Arial, sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 22px;
+}
+
+.assistant {
+  position: relative;
+  display: grid;
+  width: min(500px, 100%);
+  min-height: min(690px, calc(100vh - 44px));
+  place-items: center;
+  align-content: center;
+  gap: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(216, 222, 217, 0.9);
+  border-radius: 30px;
+  background: rgba(255, 253, 250, 0.88);
+  box-shadow: var(--shadow);
+}
+
+.brand {
+  position: absolute;
+  top: 26px;
+  left: 26px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 12px;
+  color: white;
+  background: linear-gradient(145deg, var(--green), var(--teal));
+  font-weight: 800;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 24px;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.brand p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.orb-wrap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.orb {
+  position: relative;
+  width: 250px;
+  height: 250px;
+}
+
+.orb span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(8, 120, 95, 0.22);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.assistant.listening .orb span,
+.assistant.thinking .orb span,
+.assistant.speaking .orb span {
+  animation: pulse 2s ease-out infinite;
+}
+
+.orb span:nth-child(2) {
+  animation-delay: 0.34s;
+}
+
+.orb span:nth-child(3) {
+  animation-delay: 0.68s;
+}
+
+.mic-button {
+  position: relative;
+  display: grid;
+  width: 170px;
+  height: 170px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: white;
+  background: linear-gradient(145deg, var(--green), var(--green-2));
+  box-shadow: 0 24px 48px rgba(8, 120, 95, 0.32);
+  cursor: pointer;
+  transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.mic-button:hover {
+  transform: translateY(-2px);
+}
+
+.mic-button:active {
+  transform: scale(0.98);
+}
+
+.assistant.listening .mic-button {
+  background: linear-gradient(145deg, var(--teal), var(--green));
+}
+
+.assistant.thinking .mic-button {
+  background: linear-gradient(145deg, var(--amber), var(--green));
+}
+
+.assistant.error .mic-button {
+  background: linear-gradient(145deg, var(--red), #80353b);
+}
+
+.mic-icon {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 76px;
+  border: 6px solid currentColor;
+  border-radius: 28px;
+}
+
+.mic-icon::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -30px;
+  width: 6px;
+  height: 24px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.mic-icon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -40px;
+  width: 48px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.status {
+  min-height: 32px;
+  color: var(--ink);
+  font-size: 23px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.hint {
+  max-width: 310px;
+  min-height: 42px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.controls {
+  position: absolute;
+  bottom: 28px;
+}
+
+.secondary {
+  min-width: 88px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.62;
+    transform: scale(0.62);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+@media (max-width: 560px) {
+  .page {
+    padding: 0;
+  }
+
+  .assistant {
+    min-height: 100vh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .brand {
+    top: 22px;
+    left: 22px;
+  }
+}
