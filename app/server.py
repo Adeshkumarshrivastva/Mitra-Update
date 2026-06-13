@@ -8,6 +8,7 @@ from pathlib import Path
 
 from aiohttp import WSMsgType, web
 
+from .auth import clear_login_response, create_login_response, current_profile, require_profile
 from .session import VoiceSession
 from .settings import Settings, load_env
 
@@ -41,17 +42,40 @@ def create_app(settings: Settings) -> web.Application:
     app = web.Application()
     app["settings"] = settings
     app["sessions"] = {}
+    app["auth_sessions"] = {}
 
-    async def index(_request: web.Request) -> web.FileResponse:
+    async def index(request: web.Request) -> web.FileResponse:
+        if current_profile(request) is None:
+            raise web.HTTPFound("/login")
         return web.FileResponse(settings.public_dir / "index.html")
 
+    async def login_page(request: web.Request) -> web.FileResponse:
+        if current_profile(request) is not None:
+            raise web.HTTPFound("/")
+        return web.FileResponse(settings.public_dir / "login.html")
+
+    async def api_login(request: web.Request) -> web.Response:
+        try:
+            payload = await request.json()
+        except json.JSONDecodeError as exc:
+            raise web.HTTPBadRequest(text="Invalid JSON") from exc
+        return create_login_response(request, payload, settings.login_pin)
+
+    async def api_logout(request: web.Request) -> web.Response:
+        return clear_login_response(request)
+
+    async def api_me(request: web.Request) -> web.Response:
+        profile = current_profile(request)
+        return web.json_response({"ok": True, "profile": profile.to_json() if profile else None})
+
     async def websocket_session(request: web.Request) -> web.WebSocketResponse:
+        profile = require_profile(request)
         ws = web.WebSocketResponse(heartbeat=20)
         await ws.prepare(request)
 
-        session = VoiceSession(settings=settings, ws=ws)
+        session = VoiceSession(settings=settings, ws=ws, user_profile=profile.to_json())
         request.app["sessions"][session.session_id] = session
-        logger.info("ws.session.open session_id=%s", session.session_id)
+        logger.info("ws.session.open session_id=%s name=%s route=%s", session.session_id, profile.name, profile.route)
 
         try:
             settings.require_voice_pipeline()
@@ -73,6 +97,10 @@ def create_app(settings: Settings) -> web.Application:
         return web.json_response({"ok": True, "pipeline": "webrtc", "use_dhwani": settings.use_dhwani})
 
     app.router.add_get("/", index)
+    app.router.add_get("/login", login_page)
+    app.router.add_post("/api/login", api_login)
+    app.router.add_post("/api/logout", api_logout)
+    app.router.add_get("/api/me", api_me)
     app.router.add_get("/ws/session", websocket_session)
     app.router.add_get("/health", health)
     app.router.add_static("/", settings.public_dir, show_index=False)
@@ -94,6 +122,18 @@ async def handle_ws_text(session: VoiceSession, raw: str) -> None:
         await session.send_event({"type": "answer", "sdp": answer_sdp})
     elif message_type == "ice":
         await session.handle_ice(payload.get("candidate"))
+    elif message_type == "turn.start":
+        await session.start_turn()
+    elif message_type == "turn.stop":
+        await session.stop_turn(payload.get("reason", "client"))
+    elif message_type == "turn.cancel":
+        await session.cancel_turn(payload.get("reason", "client"))
+    elif message_type == "interrupt":
+        await session.interrupt()
+    elif message_type == "end":
+        await session.close()
+    elif message_type == "ping":
+        await session.send_event({"type": "pong"})
     else:
         raise RuntimeError(f"Unsupported message type: {message_type}")
 

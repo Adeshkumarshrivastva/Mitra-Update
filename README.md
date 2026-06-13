@@ -1,6 +1,6 @@
 # MITRA Voice Assistant
 
-MITRA is a minimal browser voice demo. The browser sends microphone audio over WebRTC, the Python backend transcribes it with ElevenLabs Scribe v2, sends the transcript to Gemini, synthesizes the reply with ElevenLabs TTS, and returns audio over the same WebRTC session.
+MITRA is a minimal browser voice app. The browser sends microphone audio over WebRTC, the Python backend transcribes it with ElevenLabs Scribe v2, sends the transcript to Gemini, synthesizes the reply with ElevenLabs TTS, and returns audio over the same WebRTC session.
 
 The UI only talks to the local MITRA server. Provider hosts and keys stay in `.env`.
 
@@ -24,6 +24,7 @@ GEMINI_API_KEY=...
 GEMINI_MODEL=gemini-3.1-flash-lite
 APP_HOST=0.0.0.0
 APP_PORT=8010
+MITRA_LOGIN_PIN=1234
 ```
 
 ## Run
@@ -39,9 +40,19 @@ Open:
 http://127.0.0.1:8010
 ```
 
-Tap the MITRA mic, speak for a few seconds, then wait. The current demo captures one short turn, sends it through the voice pipeline, and plays MITRA's answer back through WebRTC.
+Login with the PIN from `.env`, then tap the MITRA mic once to start the conversation. The app keeps one live WebRTC session open, keeps listening after each reply, sends a turn after a natural pause, shows transcripts, and plays MITRA's answer back through WebRTC until you end the session. If you start speaking while MITRA is replying, MITRA automatically stops and listens.
 
 This workspace uses `8010` because VS Code is already listening on `127.0.0.1:8000`. Change `APP_PORT` if you want a different port.
+
+## Prompt
+
+The active Gemini system prompt is stored in code at `app/llm_gemini.py` and documented at:
+
+```text
+docs/mitra-system-prompt.md
+```
+
+It forces MITRA replies into short, speakable Hinglish in Devanagari script with the highway companion tone from the supplied docs.
 
 ## WebSocket Contract
 

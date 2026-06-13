@@ -278,7 +278,7 @@ async def connect_dhwani():
         "Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: {key}\r\n"
         "Sec-WebSocket-Version: 13\r\n"
-        "User-Agent: MITRA-demo/2.0\r\n"
+        "User-Agent: MITRA/2.0\r\n"
         "\r\n"
     )
     writer.write(request.encode("ascii"))

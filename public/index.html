@@ -7,23 +7,44 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <main class="shell">
-      <section class="panel" aria-label="MITRA voice assistant">
+    <main class="app-shell">
+      <section class="cockpit" aria-label="MITRA cockpit">
         <header class="topbar">
-          <div class="mark" aria-hidden="true">M</div>
-          <div>
-            <h1>MITRA</h1>
-            <p>Highway voice companion</p>
+          <div class="brand-row">
+            <div class="mark" aria-hidden="true">M</div>
+            <div>
+              <h1>MITRA</h1>
+              <p id="profileLine">Aapka apna highway saathi</p>
+            </div>
           </div>
+          <button id="logoutButton" class="icon-button" type="button" aria-label="Logout" title="Logout">
+            <span aria-hidden="true">x</span>
+          </button>
         </header>
+
+        <div class="trip-strip" aria-label="session status">
+          <div>
+            <span>Mode</span>
+            <strong>Saathi</strong>
+          </div>
+          <div>
+            <span>State</span>
+            <strong id="safetyState">Ready</strong>
+          </div>
+          <div>
+            <span>Time</span>
+            <strong id="durationText">00:00</strong>
+          </div>
+        </div>
 
         <div class="stage" aria-live="polite">
           <button id="micButton" class="mic-button" type="button" aria-label="Talk to MITRA">
             <span class="pulse" aria-hidden="true"></span>
             <span class="mic-shape" aria-hidden="true"></span>
           </button>
-          <p id="statusText" class="status">Tap to speak</p>
-          <p id="hintText" class="hint">MITRA will listen for a short turn and reply by voice.</p>
+          <p id="statusText" class="status">Tap to start</p>
+          <p id="hintText" class="hint">Ek baar tap karo, phir direct baat chalu.</p>
+          <button id="endButton" class="secondary-button" type="button">End</button>
         </div>
 
         <div class="meter" aria-hidden="true">
@@ -33,6 +54,16 @@
           <span></span>
           <span></span>
         </div>
+
+        <section class="transcript-wrap" aria-label="Conversation transcript">
+          <div class="transcript-head">
+            <h2>Transcript</h2>
+            <button id="clearTranscriptButton" class="text-button" type="button">Clear</button>
+          </div>
+          <div id="transcriptList" class="transcript-list">
+            <p class="empty-transcript">Abhi tak koi baat nahi hui.</p>
+          </div>
+        </section>
 
         <audio id="remoteAudio" autoplay playsinline></audio>
       </section>

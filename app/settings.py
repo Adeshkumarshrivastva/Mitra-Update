@@ -53,6 +53,7 @@ class Settings:
     gemini_model: str
     app_host: str
     app_port: int
+    login_pin: str
     public_dir: Path = PUBLIC_DIR
     log_dir: Path = LOG_DIR
 
@@ -68,6 +69,7 @@ class Settings:
             gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite",
             app_host=os.getenv("APP_HOST", "0.0.0.0").strip() or "0.0.0.0",
             app_port=env_int("APP_PORT", 8000),
+            login_pin=os.getenv("MITRA_LOGIN_PIN", "1234").strip(),
         )
 
     def require_voice_pipeline(self) -> None:

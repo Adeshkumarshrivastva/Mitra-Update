@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from fractions import Fraction
 from typing import Awaitable, Callable
 
@@ -26,7 +27,11 @@ class QueuedAudioTrack(MediaStreamTrack):
         super().__init__()
         self._queue: asyncio.Queue = asyncio.Queue()
         self._samples_sent = 0
+        self._queued_until = 0
         self._stopped = False
+        self._pending_markers: list[tuple[int, asyncio.Event]] = []
+        self._pace_start_time: float | None = None
+        self._pace_start_samples = 0
 
     async def recv(self):
         if self._stopped:
@@ -37,14 +42,60 @@ class QueuedAudioTrack(MediaStreamTrack):
             self._stopped = True
             raise MediaStreamError
 
-        frame.pts = self._samples_sent
+        pts = self._samples_sent
+        frame.pts = pts
         frame.time_base = Fraction(1, WEBRTC_SAMPLE_RATE)
+
+        if self._pace_start_time is None:
+            self._pace_start_time = time.monotonic()
+            self._pace_start_samples = pts
+        else:
+            target_time = self._pace_start_time + (pts - self._pace_start_samples) / WEBRTC_SAMPLE_RATE
+            delay = target_time - time.monotonic()
+            if delay > 0:
+                await asyncio.sleep(delay)
+
         self._samples_sent += frame.samples
+        self._complete_markers()
         return frame
 
-    async def send_pcm(self, pcm_bytes: bytes) -> None:
+    async def send_pcm(self, pcm_bytes: bytes) -> asyncio.Event:
+        done = asyncio.Event()
+        idle_before_enqueue = self._queue.empty() and not self._pending_markers
+        if idle_before_enqueue:
+            self._pace_start_time = None
+        queued_samples = 0
         for frame in pcm_bytes_to_audio_frames(pcm_bytes):
+            queued_samples += frame.samples
             await self._queue.put(frame)
+        if queued_samples == 0:
+            done.set()
+        else:
+            queue_start = max(self._queued_until, self._samples_sent)
+            self._queued_until = queue_start + queued_samples
+            self._pending_markers.append((self._queued_until, done))
+        return done
+
+    def _complete_markers(self) -> None:
+        ready = [item for item in self._pending_markers if item[0] <= self._samples_sent]
+        self._pending_markers = [item for item in self._pending_markers if item[0] > self._samples_sent]
+        for _sample_target, event in ready:
+            event.set()
+
+    async def clear(self) -> None:
+        while True:
+            try:
+                item = self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            if item is None:
+                await self._queue.put(None)
+                break
+        for _sample_target, event in self._pending_markers:
+            event.set()
+        self._pending_markers.clear()
+        self._queued_until = self._samples_sent
+        self._pace_start_time = None
 
     async def finish(self) -> None:
         await self._queue.put(None)
@@ -83,7 +134,7 @@ async def accept_offer(pc: RTCPeerConnection, sdp: str) -> str:
     return pc.localDescription.sdp
 
 
-async def wait_for_ice_gathering_complete(pc: RTCPeerConnection, timeout: float = 5.0) -> None:
+async def wait_for_ice_gathering_complete(pc: RTCPeerConnection, timeout: float = 1.0) -> None:
     if pc.iceGatheringState == "complete":
         return
 

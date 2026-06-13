@@ -1,14 +1,17 @@
 :root {
   color-scheme: dark;
-  --bg: #111318;
-  --panel: #1b2028;
-  --panel-2: #222936;
-  --text: #f4f7fb;
+  --bg: #101318;
+  --panel: #191f27;
+  --panel-2: #202833;
+  --surface: #11171f;
+  --text: #f5f7fb;
   --muted: #9ca8b7;
-  --line: #303948;
+  --line: #303a47;
   --accent: #18c29c;
   --accent-2: #f5b84b;
   --danger: #ff6b6b;
+  --user: #253247;
+  --mitra: #123a33;
 }
 
 * {
@@ -20,35 +23,57 @@ body {
   min-height: 100vh;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background:
-    linear-gradient(180deg, rgba(24, 194, 156, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(24, 194, 156, 0.08), transparent 38%),
+    radial-gradient(circle at top right, rgba(245, 184, 75, 0.08), transparent 34%),
     var(--bg);
   color: var(--text);
 }
 
-.shell {
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell,
+.login-shell {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 18px;
 }
 
-.panel {
-  width: min(440px, 100%);
-  min-height: 620px;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 24px;
-  padding: 24px;
+.cockpit,
+.login-panel {
+  width: min(460px, 100%);
   border: 1px solid var(--line);
   border-radius: 8px;
   background: linear-gradient(180deg, var(--panel), var(--panel-2));
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
 }
 
-.topbar {
+.cockpit {
+  min-height: min(780px, calc(100vh - 24px));
+  display: grid;
+  grid-template-rows: auto auto 1fr auto minmax(180px, 240px) auto;
+  gap: 18px;
+  padding: 20px;
+}
+
+.topbar,
+.login-brand {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 14px;
+}
+
+.brand-row,
+.login-brand {
+  justify-content: flex-start;
 }
 
 .mark {
@@ -59,50 +84,102 @@ body {
   border-radius: 8px;
   background: var(--accent);
   color: #06241d;
-  font-weight: 800;
+  font-weight: 850;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
 }
 
 h1 {
-  margin: 0;
   font-size: 1.35rem;
   line-height: 1.1;
   letter-spacing: 0;
 }
 
-p {
-  margin: 0;
+h2 {
+  font-size: 0.95rem;
+  letter-spacing: 0;
 }
 
 .topbar p,
-.hint {
+.login-brand p,
+.hint,
+.empty-transcript,
+.login-status {
   color: var(--muted);
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.trip-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trip-strip div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(17, 23, 31, 0.7);
+}
+
+.trip-strip span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.trip-strip strong {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.92rem;
 }
 
 .stage {
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 18px;
+  gap: 14px;
   text-align: center;
 }
 
 .mic-button {
   position: relative;
-  width: 156px;
-  height: 156px;
+  width: 150px;
+  height: 150px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(24, 194, 156, 0.46);
+  border: 1px solid rgba(24, 194, 156, 0.48);
   border-radius: 50%;
   background: #141922;
   color: var(--text);
-  cursor: pointer;
   box-shadow: inset 0 0 0 10px rgba(24, 194, 156, 0.07);
 }
 
-.mic-button:focus-visible {
+.mic-button:focus-visible,
+.secondary-button:focus-visible,
+.login-button:focus-visible,
+.text-button:focus-visible,
+.icon-button:focus-visible {
   outline: 3px solid var(--accent-2);
-  outline-offset: 5px;
+  outline-offset: 4px;
 }
 
 .pulse {
@@ -145,19 +222,39 @@ p {
 
 .status {
   min-height: 34px;
-  font-size: 1.45rem;
-  font-weight: 720;
+  font-size: 1.35rem;
+  font-weight: 760;
   line-height: 1.2;
 }
 
 .hint {
-  min-height: 48px;
-  max-width: 300px;
-  line-height: 1.45;
+  min-height: 42px;
+  max-width: 320px;
+  line-height: 1.42;
+}
+
+.secondary-button,
+.login-button,
+.text-button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.secondary-button {
+  min-width: 104px;
+  min-height: 42px;
+  padding: 0 18px;
+}
+
+.secondary-button:disabled {
+  cursor: default;
+  opacity: 0.42;
 }
 
 .meter {
-  height: 48px;
+  height: 42px;
   display: flex;
   justify-content: center;
   align-items: end;
@@ -166,7 +263,7 @@ p {
 
 .meter span {
   width: 10px;
-  height: 16px;
+  height: 14px;
   border-radius: 999px;
   background: var(--line);
   transition: height 160ms ease, background 160ms ease;
@@ -212,8 +309,113 @@ body[data-mode="error"] .meter span {
   animation-delay: 360ms;
 }
 
+.transcript-wrap {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+}
+
+.transcript-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.text-button {
+  min-height: 32px;
+  padding: 0 12px;
+  color: var(--muted);
+}
+
+.transcript-list {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.bubble {
+  max-width: 88%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  line-height: 1.42;
+}
+
+.bubble span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.bubble.user {
+  align-self: flex-end;
+  background: var(--user);
+}
+
+.bubble.mitra {
+  align-self: flex-start;
+  background: var(--mitra);
+}
+
 audio {
   display: none;
+}
+
+.login-body {
+  background:
+    linear-gradient(180deg, rgba(24, 194, 156, 0.1), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(245, 184, 75, 0.1), transparent 34%),
+    var(--bg);
+}
+
+.login-panel {
+  padding: 24px;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+
+.login-form input:focus {
+  border-color: var(--accent);
+}
+
+.login-button {
+  min-height: 48px;
+  margin-top: 4px;
+  background: var(--accent);
+  color: #05231c;
+  font-weight: 800;
+}
+
+.login-status {
+  min-height: 24px;
+  text-align: center;
 }
 
 @keyframes breathe {
@@ -234,22 +436,28 @@ audio {
     height: 14px;
   }
   50% {
-    height: 42px;
+    height: 40px;
   }
 }
 
 @media (max-width: 520px) {
-  .shell {
-    padding: 12px;
+  .app-shell,
+  .login-shell {
+    padding: 10px;
   }
 
-  .panel {
-    min-height: calc(100vh - 24px);
-    padding: 20px;
+  .cockpit {
+    min-height: calc(100vh - 20px);
+    padding: 16px;
+    gap: 14px;
   }
 
   .mic-button {
-    width: 138px;
-    height: 138px;
+    width: 132px;
+    height: 132px;
+  }
+
+  .trip-strip div {
+    padding: 8px;
   }
 }
