@@ -4,11 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>MITRA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
     <main class="app-shell">
       <section class="cockpit" aria-label="MITRA cockpit">
+
+        <!-- Full-width header -->
         <header class="topbar">
           <div class="brand-row">
             <div class="mark" aria-hidden="true">M</div>
@@ -18,52 +23,58 @@
             </div>
           </div>
           <button id="logoutButton" class="icon-button" type="button" aria-label="Logout" title="Logout">
-            <span aria-hidden="true">x</span>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+              <path d="M9 3A5 5 0 1 1 5 3"/>
+              <line x1="7" y1="0.5" x2="7" y2="7"/>
+            </svg>
           </button>
         </header>
 
-        <div class="trip-strip" aria-label="session status">
-          <div>
-            <span>Mode</span>
-            <strong>Saathi</strong>
-          </div>
-          <div>
-            <span>State</span>
-            <strong id="safetyState">Ready</strong>
-          </div>
-          <div>
-            <span>Time</span>
-            <strong id="durationText">00:00</strong>
-          </div>
-        </div>
+        <!-- Two-column body -->
+        <div class="cockpit-body">
 
-        <div class="stage" aria-live="polite">
-          <button id="micButton" class="mic-button" type="button" aria-label="Talk to MITRA">
-            <span class="pulse" aria-hidden="true"></span>
-            <span class="mic-shape" aria-hidden="true"></span>
-          </button>
-          <p id="statusText" class="status">Tap to start</p>
-          <p id="hintText" class="hint">Ek baar tap karo, phir direct baat chalu.</p>
-          <button id="endButton" class="secondary-button" type="button">End</button>
-        </div>
+          <!-- Left: controls -->
+          <div class="controls-col">
 
-        <div class="meter" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
+            <div class="trip-strip" aria-label="session status">
+              <div><span>Mode</span><strong>Saathi</strong></div>
+              <div><span>State</span><strong id="safetyState">Ready</strong></div>
+              <div><span>Time</span><strong id="durationText">00:00</strong></div>
+            </div>
 
-        <section class="transcript-wrap" aria-label="Conversation transcript">
-          <div class="transcript-head">
-            <h2>Transcript</h2>
-            <button id="clearTranscriptButton" class="text-button" type="button">Clear</button>
+            <div class="stage" aria-live="polite">
+              <p id="statusText" class="status">Tap to start</p>
+              <button id="micButton" class="mic-button" type="button" aria-label="Talk to MITRA">
+                <span class="pulse" aria-hidden="true"></span>
+                <svg class="mic-icon" width="22" height="32" viewBox="0 0 22 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="6" y="1" width="10" height="17" rx="5"/>
+                  <path d="M1 16c0 5.52 4.48 10 10 10s10-4.48 10-10"/>
+                  <line x1="11" y1="26" x2="11" y2="31"/>
+                  <line x1="7" y1="31" x2="15" y2="31"/>
+                </svg>
+              </button>
+              <p id="hintText" class="hint">Ek baar tap karo, phir direct baat chalu.</p>
+              <button id="endButton" class="secondary-button" type="button">End session</button>
+            </div>
+
+            <div class="meter" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+
           </div>
-          <div id="transcriptList" class="transcript-list">
-            <p class="empty-transcript">Abhi tak koi baat nahi hui.</p>
-          </div>
-        </section>
+
+          <!-- Right: transcript -->
+          <section class="transcript-wrap" aria-label="Conversation transcript">
+            <div class="transcript-head">
+              <h2>Conversation</h2>
+              <button id="clearTranscriptButton" class="text-button" type="button">Clear</button>
+            </div>
+            <div id="transcriptList" class="transcript-list">
+              <p class="empty-transcript">Abhi tak koi baat nahi hui.</p>
+            </div>
+          </section>
+
+        </div><!-- /.cockpit-body -->
 
         <audio id="remoteAudio" autoplay playsinline></audio>
       </section>

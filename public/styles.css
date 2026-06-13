@@ -1,176 +1,261 @@
 :root {
   color-scheme: dark;
-  --bg: #101318;
-  --panel: #191f27;
-  --panel-2: #202833;
-  --surface: #11171f;
-  --text: #f5f7fb;
-  --muted: #9ca8b7;
-  --line: #303a47;
-  --accent: #18c29c;
-  --accent-2: #f5b84b;
-  --danger: #ff6b6b;
-  --user: #253247;
-  --mitra: #123a33;
+  --bg:      #111110;
+  --panel:   #191918;
+  --panel-2: #1f1f1d;
+  --surface: #0e0e0d;
+  --text:    #dfdcd6;
+  --muted:   #787570;
+  --line:    #292826;
+  --accent:  #7a9e78;
+  --accent-2:#9e8c5e;
+  --danger:  #c05454;
+  --user:    #1e1e1c;
+  --mitra:   #191e18;
+  --radius:  9px;
 }
 
-* {
-  box-sizing: border-box;
-}
+*, *::before, *::after { box-sizing: border-box; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+h1, h2, p { margin: 0; }
 
 body {
   margin: 0;
   min-height: 100vh;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background:
-    linear-gradient(180deg, rgba(24, 194, 156, 0.08), transparent 38%),
-    radial-gradient(circle at top right, rgba(245, 184, 75, 0.08), transparent 34%),
+    radial-gradient(ellipse 80% 36% at 50% -4%, rgba(122, 158, 120, 0.055), transparent),
+    radial-gradient(ellipse 50% 24% at 96% 100%, rgba(158, 140, 90, 0.04), transparent),
     var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-button,
-input {
-  font: inherit;
-}
-
-button {
-  cursor: pointer;
-}
+/* ── Shell ── */
 
 .app-shell,
 .login-shell {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding: 20px;
 }
 
 .cockpit,
 .login-panel {
-  width: min(460px, 100%);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: linear-gradient(180deg, var(--panel), var(--panel-2));
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  border-radius: var(--radius);
+  background: linear-gradient(165deg, var(--panel) 0%, var(--panel-2) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.025),
+    0 32px 80px rgba(0, 0, 0, 0.55),
+    0 8px 24px rgba(0, 0, 0, 0.3);
 }
+
+/* ── Cockpit: two-column layout ── */
 
 .cockpit {
-  min-height: min(780px, calc(100vh - 24px));
-  display: grid;
-  grid-template-rows: auto auto 1fr auto minmax(180px, 240px) auto;
-  gap: 18px;
-  padding: 20px;
+  width: min(740px, 100%);
+  min-height: min(680px, calc(100vh - 28px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.topbar,
-.login-brand {
+/* ── Topbar (full width) ── */
+
+.topbar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--line);
 }
 
-.brand-row,
-.login-brand {
-  justify-content: flex-start;
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .mark {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   border-radius: 8px;
   background: var(--accent);
-  color: #06241d;
-  font-weight: 850;
-}
-
-h1,
-h2,
-p {
-  margin: 0;
+  color: #071207;
+  font-weight: 800;
+  font-size: 1rem;
+  box-shadow: 0 2px 10px rgba(122, 158, 120, 0.28);
 }
 
 h1 {
-  font-size: 1.35rem;
+  font-size: 1.1rem;
+  font-weight: 700;
   line-height: 1.1;
-  letter-spacing: 0;
+  letter-spacing: -0.025em;
 }
 
 h2 {
-  font-size: 0.95rem;
-  letter-spacing: 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-.topbar p,
-.login-brand p,
-.hint,
-.empty-transcript,
-.login-status {
+.topbar p {
   color: var(--muted);
+  font-size: 0.76rem;
 }
 
 .icon-button {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 1.35rem;
-  line-height: 1;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  transition: color 140ms, border-color 140ms, background 140ms;
 }
 
+.icon-button:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ── Two-column body ── */
+
+.cockpit-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* ── Left column: controls ── */
+
+.controls-col {
+  width: 210px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* Trip strip — vertical in narrow column */
+
 .trip-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .trip-strip div {
-  min-width: 0;
-  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(17, 23, 31, 0.7);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.18);
+  gap: 8px;
 }
 
 .trip-strip span {
-  display: block;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .trip-strip strong {
-  display: block;
-  margin-top: 3px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.92rem;
+  text-align: right;
 }
 
+/* Stage — fills remaining space, mic centered */
+
 .stage {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   text-align: center;
 }
 
+.status {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  max-width: 170px;
+}
+
+/* Mic button */
+
 .mic-button {
   position: relative;
-  width: 150px;
-  height: 150px;
+  width: 104px;
+  height: 104px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(24, 194, 156, 0.48);
+  border: 1.5px solid rgba(122, 158, 120, 0.32);
   border-radius: 50%;
-  background: #141922;
+  background: radial-gradient(circle at 50% 38%, #1c1e1c, #131413);
   color: var(--text);
-  box-shadow: inset 0 0 0 10px rgba(24, 194, 156, 0.07);
+  box-shadow:
+    inset 0 0 0 12px rgba(122, 158, 120, 0.035),
+    0 0 36px rgba(0, 0, 0, 0.5),
+    0 0 0 7px rgba(122, 158, 120, 0.018);
+  transition: border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.mic-button:hover {
+  border-color: rgba(122, 158, 120, 0.55);
+  box-shadow:
+    inset 0 0 0 12px rgba(122, 158, 120, 0.065),
+    0 0 44px rgba(0, 0, 0, 0.5),
+    0 0 0 7px rgba(122, 158, 120, 0.04);
+}
+
+body[data-mode="listening"] .mic-button,
+body[data-mode="speaking"] .mic-button {
+  border-color: rgba(122, 158, 120, 0.65);
+}
+
+body[data-mode="error"] .mic-button {
+  border-color: rgba(192, 84, 84, 0.5);
 }
 
 .mic-button:focus-visible,
@@ -178,92 +263,66 @@ h2 {
 .login-button:focus-visible,
 .text-button:focus-visible,
 .icon-button:focus-visible {
-  outline: 3px solid var(--accent-2);
-  outline-offset: 4px;
+  outline: 2px solid var(--accent-2);
+  outline-offset: 3px;
 }
 
 .pulse {
   position: absolute;
-  inset: 16px;
+  inset: 12px;
   border-radius: 50%;
-  background: rgba(24, 194, 156, 0.1);
+  background: rgba(122, 158, 120, 0.055);
 }
 
-.mic-shape {
+body[data-mode="listening"] .pulse,
+body[data-mode="speaking"] .pulse {
+  animation: breathe 1100ms ease-in-out infinite;
+}
+
+.mic-icon {
   position: relative;
-  width: 38px;
-  height: 58px;
-  border: 4px solid currentColor;
-  border-radius: 24px;
+  z-index: 1;
 }
 
-.mic-shape::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -22px;
-  width: 4px;
-  height: 20px;
-  transform: translateX(-50%);
-  background: currentColor;
-}
-
-.mic-shape::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -30px;
-  width: 34px;
-  height: 4px;
-  transform: translateX(-50%);
-  background: currentColor;
-  border-radius: 4px;
-}
-
-.status {
-  min-height: 34px;
-  font-size: 1.35rem;
-  font-weight: 760;
-  line-height: 1.2;
-}
-
-.hint {
-  min-height: 42px;
-  max-width: 320px;
-  line-height: 1.42;
-}
-
-.secondary-button,
-.login-button,
-.text-button {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-}
+/* End button */
 
 .secondary-button {
-  min-width: 104px;
-  min-height: 42px;
-  padding: 0 18px;
+  min-width: 88px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: background 140ms, border-color 140ms;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.09);
 }
 
 .secondary-button:disabled {
   cursor: default;
-  opacity: 0.42;
+  opacity: 0.34;
 }
 
+/* Meter — bottom of left col */
+
 .meter {
-  height: 42px;
+  flex-shrink: 0;
+  height: 22px;
   display: flex;
   justify-content: center;
-  align-items: end;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 4px;
 }
 
 .meter span {
-  width: 10px;
-  height: 14px;
+  width: 5px;
+  height: 6px;
   border-radius: 999px;
   background: var(--line);
   transition: height 160ms ease, background 160ms ease;
@@ -275,189 +334,269 @@ body[data-mode="speaking"] .meter span {
   animation: level 800ms ease-in-out infinite;
 }
 
-body[data-mode="listening"] .pulse,
-body[data-mode="speaking"] .pulse {
-  animation: breathe 1100ms ease-in-out infinite;
-}
-
 body[data-mode="thinking"] .meter span,
 body[data-mode="connecting"] .meter span {
   background: var(--accent-2);
-}
-
-body[data-mode="error"] .mic-button {
-  border-color: rgba(255, 107, 107, 0.7);
 }
 
 body[data-mode="error"] .meter span {
   background: var(--danger);
 }
 
-.meter span:nth-child(2) {
-  animation-delay: 90ms;
-}
+.meter span:nth-child(2) { animation-delay:  90ms; }
+.meter span:nth-child(3) { animation-delay: 180ms; }
+.meter span:nth-child(4) { animation-delay: 270ms; }
+.meter span:nth-child(5) { animation-delay: 360ms; }
 
-.meter span:nth-child(3) {
-  animation-delay: 180ms;
-}
-
-.meter span:nth-child(4) {
-  animation-delay: 270ms;
-}
-
-.meter span:nth-child(5) {
-  animation-delay: 360ms;
-}
+/* ── Right column: transcript ── */
 
 .transcript-wrap {
+  flex: 1;
+  min-width: 0;
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
   gap: 10px;
 }
 
 .transcript-head {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .text-button {
-  min-height: 32px;
-  padding: 0 12px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
   color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  transition: color 140ms, background 140ms, border-color 140ms;
+}
+
+.text-button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .transcript-list {
+  flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
   padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
+.transcript-list::-webkit-scrollbar { width: 3px; }
+.transcript-list::-webkit-scrollbar-track { background: transparent; }
+.transcript-list::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+/* Only latest bubble is full-opacity; older ones are dim until hovered */
+
 .bubble {
-  max-width: 88%;
-  padding: 10px 12px;
-  border-radius: 8px;
-  line-height: 1.42;
+  max-width: 92%;
+  padding: 8px 11px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  line-height: 1.48;
+  font-size: 0.82rem;
+  opacity: 0.45;
+  transition: opacity 260ms ease;
+}
+
+.bubble:last-child {
+  opacity: 1;
+}
+
+.transcript-list:hover .bubble {
+  opacity: 0.75;
+}
+
+.transcript-list:hover .bubble:last-child {
+  opacity: 1;
 }
 
 .bubble span {
   display: block;
   margin-bottom: 4px;
   color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
 .bubble.user {
   align-self: flex-end;
   background: var(--user);
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .bubble.mitra {
   align-self: flex-start;
   background: var(--mitra);
+  border-color: rgba(122, 158, 120, 0.11);
 }
 
-audio {
-  display: none;
+.empty-transcript {
+  color: var(--muted);
+  font-size: 0.8rem;
+  opacity: 1 !important;
+  padding: 12px 0;
+}
+
+audio { display: none; }
+
+/* ── Login ── */
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .login-body {
   background:
-    linear-gradient(180deg, rgba(24, 194, 156, 0.1), transparent 42%),
-    radial-gradient(circle at bottom left, rgba(245, 184, 75, 0.1), transparent 34%),
+    radial-gradient(ellipse 80% 32% at 50% 0%, rgba(122, 158, 120, 0.06), transparent),
+    radial-gradient(ellipse 50% 26% at 4% 98%, rgba(158, 140, 90, 0.05), transparent),
     var(--bg);
 }
 
 .login-panel {
-  padding: 24px;
+  width: min(420px, 100%);
+  padding: 26px;
 }
 
 .login-form {
   display: grid;
-  gap: 14px;
-  margin-top: 28px;
+  gap: 13px;
+  margin-top: 26px;
 }
 
 .login-form label {
   display: grid;
-  gap: 7px;
+  gap: 6px;
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
 }
 
 .login-form input {
   width: 100%;
-  min-height: 46px;
+  min-height: 42px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0 12px;
   background: var(--surface);
   color: var(--text);
   outline: none;
+  font-size: 0.88rem;
+  transition: border-color 140ms, box-shadow 140ms;
 }
+
+.login-form input::placeholder { color: rgba(120, 117, 112, 0.38); }
 
 .login-form input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(122, 158, 120, 0.11);
 }
 
 .login-button {
-  min-height: 48px;
+  min-height: 44px;
   margin-top: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
   background: var(--accent);
-  color: #05231c;
-  font-weight: 800;
+  color: #071207;
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 14px rgba(122, 158, 120, 0.22);
+  transition: opacity 140ms, transform 80ms;
 }
+
+.login-button:hover { opacity: 0.88; }
+.login-button:active { transform: scale(0.99); }
 
 .login-status {
-  min-height: 24px;
+  min-height: 20px;
   text-align: center;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
+/* ── Animations ── */
+
 @keyframes breathe {
-  0%,
-  100% {
-    transform: scale(0.92);
-    opacity: 0.68;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 1;
-  }
+  0%, 100% { transform: scale(0.9);  opacity: 0.5; }
+  50%       { transform: scale(1.1); opacity: 1;   }
 }
 
 @keyframes level {
-  0%,
-  100% {
-    height: 14px;
-  }
-  50% {
-    height: 40px;
-  }
+  0%, 100% { height: 6px;  }
+  50%       { height: 20px; }
 }
 
-@media (max-width: 520px) {
-  .app-shell,
-  .login-shell {
-    padding: 10px;
-  }
+/* ── Responsive ── */
+
+@media (max-width: 600px) {
+  .app-shell { padding: 0; }
 
   .cockpit {
-    min-height: calc(100vh - 20px);
-    padding: 16px;
-    gap: 14px;
+    width: 100%;
+    min-height: 100vh;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
   }
 
-  .mic-button {
-    width: 132px;
-    height: 132px;
+  .cockpit-body { flex-direction: column; }
+
+  .controls-col {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .trip-strip {
+    flex-direction: row;
+    gap: 6px;
   }
 
   .trip-strip div {
-    padding: 8px;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 6px 8px;
   }
+
+  .trip-strip strong { text-align: left; font-size: 0.78rem; }
+
+  .stage {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+
+  .hint { max-width: 200px; }
+
+  .transcript-wrap { padding: 10px 12px; }
 }
