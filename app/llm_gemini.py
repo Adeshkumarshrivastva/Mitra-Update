@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import dataclass
 from urllib import error, parse, request
 
 
@@ -50,10 +51,57 @@ Examples of desired tone:
 - "चलो 20 सेकंड का रीसेट करते हैं, सांस अंदर लो... अब धीरे से बाहर छोड़ो।"
 - "वाह भाई, बच्चे आपका नाम रोशन करेंगे, बस आप अपना ध्यान भी रखना।"
 
+Healthcare support flow:
+- MITRA is not a doctor. Your job is to keep the saathi calm, suggest basic self-care, and connect them to the Healthcare Support team when they want it.
+- When the saathi reports a health problem (thakan, sir dard, stress, ghabrahat, chakkar, halka bukhar, body pain, etc.):
+  1. Show empathy calmly. Do not create panic.
+  2. Suggest simple self-care: aaram, paani, halka khana, gehri saans, surakshit jagah par ruk jana.
+  3. Then ask once: "अगर इसके बाद भी ठीक न लगे तो मैं डॉक्टर से आपकी बात करवा सकती हूँ। क्या आप डॉक्टर से बात करना चाहेंगे?"
+- If the saathi says haan/yes: ask "क्या आप अभी बात करना चाहेंगे या थोड़ी देर बाद?"
+- Only when the saathi clearly confirms they want the call NOW (abhi, haan abhi, kar do, jod do): call the tool request_healthcare_call with timing="now" and a short issue_summary. In the SAME reply also speak one short calm line telling them to wait, for example: "ठीक है भाई, एक सेकंड रुकिए, मैं अभी कॉल जोड़ रही हूँ।" Never call the tool before the saathi has confirmed.
+- If the saathi says thodi der baad / journey ke baad / abhi nahi: call request_healthcare_call with timing="later", and reassure them, for example: "बिलकुल, जब भी आप कहेंगे मैं उसी समय डॉक्टर से आपकी बात करवा दूँगी।"
+- If earlier the saathi deferred the call and now says "डॉक्टर से बात करवा दो" (or similar), do NOT ask again: directly call request_healthcare_call with timing="now" plus the short wait line.
+- Never diagnose an illness. Never suggest, name, or prescribe any medicine or dose. If asked which medicine to take, gently decline and offer to connect them to the healthcare team instead.
+- Never invent or guess a phone number. Only ever say a phone number that the system has explicitly given you in a system note. If no number was given and the saathi asks for one, say you are getting it connected instead of making one up.
+
 Final answer requirement:
 - Every assistant reply must be directly speakable by TTS.
 - Keep it lively, concise, and safe.
 """.strip()
+
+
+HEALTHCARE_CALL_TOOL = {
+    "name": "request_healthcare_call",
+    "description": (
+        "Connect the driver to the Healthcare Support team via a phone call. "
+        "Only use this AFTER the driver has clearly agreed to talk to a doctor and confirmed the timing. "
+        "Never call it on a plain health complaint before the driver has said yes."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "timing": {
+                "type": "string",
+                "enum": ["now", "later"],
+                "description": (
+                    "now = the driver wants to be connected immediately; "
+                    "later = the driver wants the call after some time or after the journey."
+                ),
+            },
+            "issue_summary": {
+                "type": "string",
+                "description": "Short plain-language summary of the driver's health concern for the healthcare team.",
+            },
+        },
+        "required": ["timing"],
+    },
+}
+
+
+@dataclass
+class LLMResult:
+    text: str
+    function_call: dict | None = None
 
 
 class GeminiLLM:
@@ -65,14 +113,30 @@ class GeminiLLM:
         self,
         conversation_messages: list[dict[str, str]],
         user_profile: dict[str, str] | None = None,
-    ) -> str:
-        return await asyncio.to_thread(self._generate_sync, conversation_messages, user_profile)
+        healthcare_enabled: bool = False,
+        healthcare_deferred: bool = False,
+        call_preference: str = "ai_agent",
+        call_number: str = "",
+    ) -> LLMResult:
+        return await asyncio.to_thread(
+            self._generate_sync,
+            conversation_messages,
+            user_profile,
+            healthcare_enabled,
+            healthcare_deferred,
+            call_preference,
+            call_number,
+        )
 
     def _generate_sync(
         self,
         conversation_messages: list[dict[str, str]],
         user_profile: dict[str, str] | None = None,
-    ) -> str:
+        healthcare_enabled: bool = False,
+        healthcare_deferred: bool = False,
+        call_preference: str = "ai_agent",
+        call_number: str = "",
+    ) -> LLMResult:
         model_path = parse.quote(self.model, safe="")
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -80,12 +144,16 @@ class GeminiLLM:
         )
         payload = {
             "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-            "contents": _contents(conversation_messages, user_profile),
+            "contents": _contents(
+                conversation_messages, user_profile, healthcare_deferred, call_preference, call_number
+            ),
             "generationConfig": {
                 "temperature": 0.85,
                 "maxOutputTokens": 220,
             },
         }
+        if healthcare_enabled:
+            payload["tools"] = [{"function_declarations": [HEALTHCARE_CALL_TOOL]}]
         req = request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -93,10 +161,10 @@ class GeminiLLM:
             headers={"Content-Type": "application/json"},
         )
         data = _open_json(req, timeout=90)
-        text = _extract_text(data)
-        if not text:
+        text, function_call = _parse_response(data)
+        if not text and function_call is None:
             raise RuntimeError("Gemini returned an empty assistant response")
-        return text
+        return LLMResult(text=text, function_call=function_call)
 
 
 def _gemini_message(message: dict[str, str]) -> dict:
@@ -104,11 +172,45 @@ def _gemini_message(message: dict[str, str]) -> dict:
     return {"role": role, "parts": [{"text": message.get("content", "")}]}
 
 
+def _preference_note(call_preference: str, call_number: str) -> str | None:
+    if call_preference == "ai_agent":
+        return (
+            "System note: the driver's chosen support mode is AI AGENT. When they confirm, an AI "
+            "healthcare agent will call the driver's phone. Speak naturally about connecting them. "
+            "Do not read out any phone number."
+        )
+    if call_preference == "human_agent":
+        return (
+            "System note: the driver's chosen support mode is HUMAN AGENT. When they confirm, a real "
+            "person from the healthcare team will be connected on a phone call. Reassure them a human "
+            "will talk to them. Do not read out any phone number."
+        )
+    if call_preference == "call_human":
+        number_line = (
+            f"The healthcare number is {call_number}. If the driver asks which number to call, read "
+            "out exactly this number, digit by digit, and never invent any other number."
+            if call_number
+            else "You have not been given a number; do not invent one."
+        )
+        return (
+            "System note: the driver's chosen support mode is CALL HUMAN AGENT. When they confirm, you "
+            "cannot dial for them; the app shows the healthcare number on their phone screen so they "
+            f"can tap it to call. Tell them you are opening the number for them to tap. {number_line}"
+        )
+    return None
+
+
 def _contents(
     conversation_messages: list[dict[str, str]],
     user_profile: dict[str, str] | None,
+    healthcare_deferred: bool = False,
+    call_preference: str = "ai_agent",
+    call_number: str = "",
 ) -> list[dict]:
     contents = []
+    preference_note = _preference_note(call_preference, call_number)
+    if preference_note:
+        contents.append({"role": "user", "parts": [{"text": preference_note}]})
     if user_profile:
         name = user_profile.get("name", "Saathi")
         truck = user_profile.get("truck", "Truck")
@@ -127,18 +229,41 @@ def _contents(
                 ],
             }
         )
+    if healthcare_deferred:
+        contents.append(
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": (
+                            "System note: the driver earlier chose to talk to the doctor LATER. "
+                            "If the driver now asks to be connected, call request_healthcare_call "
+                            "with timing=now immediately, without asking again."
+                        )
+                    }
+                ],
+            }
+        )
     contents.extend(_gemini_message(message) for message in conversation_messages)
     return contents
 
 
-def _extract_text(payload: dict) -> str:
+def _parse_response(payload: dict) -> tuple[str, dict | None]:
     texts: list[str] = []
+    function_call: dict | None = None
     for candidate in payload.get("candidates", []):
         for part in candidate.get("content", {}).get("parts", []):
             text = part.get("text")
             if text:
                 texts.append(text)
-    return " ".join(text.strip() for text in texts if text.strip()).strip()
+            call = part.get("functionCall")
+            if call and function_call is None:
+                function_call = {
+                    "name": call.get("name", ""),
+                    "args": call.get("args", {}) or {},
+                }
+    combined = " ".join(text.strip() for text in texts if text.strip()).strip()
+    return combined, function_call
 
 
 def _open_json(req: request.Request, timeout: int) -> dict:

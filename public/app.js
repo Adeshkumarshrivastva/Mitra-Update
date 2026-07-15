@@ -10,6 +10,20 @@
   const durationText = document.getElementById("durationText");
   const transcriptList = document.getElementById("transcriptList");
   const remoteAudio = document.getElementById("remoteAudio");
+  const callModal = document.getElementById("callModal");
+  const callModalText = document.getElementById("callModalText");
+  const callModalTimer = document.getElementById("callModalTimer");
+  const callModalActions = document.getElementById("callModalActions");
+  const callWaitActions = document.getElementById("callWaitActions");
+  const callYesButton = document.getElementById("callYesButton");
+  const callNoButton = document.getElementById("callNoButton");
+  const callArrivedButton = document.getElementById("callArrivedButton");
+  const callDialActions = document.getElementById("callDialActions");
+  const callDialLink = document.getElementById("callDialLink");
+  const callDialNumber = document.getElementById("callDialNumber");
+  const callDialClose = document.getElementById("callDialClose");
+  const callPrefGroup = document.getElementById("callPrefGroup");
+  const callPrefRadios = Array.from(document.querySelectorAll('input[name="callPref"]'));
 
   const MIN_TURN_MS = 1000;
   const MAX_TURN_MS = 12000;
@@ -42,6 +56,9 @@
   let bargeStartedAt = 0;
   let speakingStartedAt = 0;
   let autoStarting = false;
+  let paused = false;
+  let callDeadline = 0;
+  let callTimerInterval = null;
 
   function setMode(mode, status, hint) {
     document.body.dataset.mode = mode;
@@ -154,6 +171,10 @@
   }
 
   async function startConversation() {
+    if (paused) {
+      await resumeFromPause();
+      return;
+    }
     if (conversationActive) {
       if (speaking || busy) await autoInterruptAndListen();
       return;
@@ -162,6 +183,8 @@
     try {
       conversationActive = true;
       await ensureSession();
+      sendSignal({ type: "call_preference", value: selectedPreference() });
+      lockPreference(true);
       await resumeAudio();
       await beginListening(false);
     } catch (error) {
@@ -216,7 +239,7 @@
         return;
       }
 
-      const canBargeIn = conversationActive && speaking && now - speakingStartedAt >= BARGE_IN_GRACE_MS;
+      const canBargeIn = !paused && conversationActive && speaking && now - speakingStartedAt >= BARGE_IN_GRACE_MS;
       if (canBargeIn && volume > BARGE_IN_VOLUME_THRESHOLD) {
         if (!bargeStartedAt) bargeStartedAt = now;
         if (!autoStarting && now - bargeStartedAt >= BARGE_IN_MS) autoInterruptAndListen();
@@ -294,6 +317,123 @@
     autoStarting = false;
   }
 
+  function selectedPreference() {
+    const checked = callPrefRadios.find((radio) => radio.checked);
+    return checked ? checked.value : "ai_agent";
+  }
+
+  function lockPreference(locked) {
+    callPrefRadios.forEach((radio) => { radio.disabled = locked; });
+    if (callPrefGroup) callPrefGroup.dataset.locked = locked ? "true" : "false";
+  }
+
+  function enterQuietPause(hint) {
+    paused = true;
+    listening = false;
+    busy = false;
+    clearIdleRefresh();
+    if (maxCaptureTimer) window.clearTimeout(maxCaptureTimer);
+    maxCaptureTimer = null;
+    setMode("idle", "Paused", hint || "Aap baat kar lijiye. Mic tap karke MITRA ko wapas bulayein.");
+  }
+
+  function showCallConfirm(timeoutMs) {
+    paused = true;
+    listening = false;
+    busy = false;
+    clearIdleRefresh();
+    if (maxCaptureTimer) window.clearTimeout(maxCaptureTimer);
+    maxCaptureTimer = null;
+    clearCallTimer();
+
+    callDeadline = Date.now() + timeoutMs;
+    callModalText.textContent = "Kya aapko call aa gayi?";
+    callModalTimer.hidden = true;
+    callModalActions.hidden = false;
+    callWaitActions.hidden = true;
+    callDialActions.hidden = true;
+    callModal.hidden = false;
+    setMode("speaking", "Call connected", "Neeche batao — call aa gayi?");
+  }
+
+  function showDialer(number) {
+    paused = true;
+    listening = false;
+    busy = false;
+    clearIdleRefresh();
+    if (maxCaptureTimer) window.clearTimeout(maxCaptureTimer);
+    maxCaptureTimer = null;
+    clearCallTimer();
+
+    callDialLink.href = `tel:${number}`;
+    callDialNumber.textContent = number;
+    callModalText.textContent = "Healthcare team ka number";
+    callModalTimer.hidden = true;
+    callModalActions.hidden = true;
+    callWaitActions.hidden = true;
+    callDialActions.hidden = false;
+    callModal.hidden = false;
+    setMode("idle", "Paused", "Number par tap karke call kijiye.");
+  }
+
+  function hideCallModal() {
+    clearCallTimer();
+    callModal.hidden = true;
+  }
+
+  function clearCallTimer() {
+    if (callTimerInterval) window.clearInterval(callTimerInterval);
+    callTimerInterval = null;
+  }
+
+  function onCallReceived() {
+    hideCallModal();
+    sendSignal({ type: "healthcare.confirm", received: true });
+    // Stay paused while the driver is on the call. Tap mic to resume later.
+    speaking = false;
+    busy = false;
+    setMode("idle", "Paused", "Call chal rahi hai. Baat karni ho to mic tap karo.");
+  }
+
+  function onCallNotArrivedYet() {
+    callModalText.textContent = "Thoda rukiye, call aa rahi hai…";
+    callModalActions.hidden = true;
+    callWaitActions.hidden = false;
+    callModalTimer.hidden = false;
+    startCallCountdown();
+  }
+
+  function startCallCountdown() {
+    clearCallTimer();
+    updateCallCountdown();
+    callTimerInterval = window.setInterval(updateCallCountdown, 250);
+  }
+
+  function updateCallCountdown() {
+    const remaining = Math.max(0, Math.ceil((callDeadline - Date.now()) / 1000));
+    callModalTimer.textContent = `${remaining}s`;
+    if (remaining <= 0) onCallTimeout();
+  }
+
+  function onCallTimeout() {
+    clearCallTimer();
+    hideCallModal();
+    paused = false;
+    busy = true;
+    setMode("thinking", "MITRA soch raha hai", "Call nahi aayi, MITRA sambhal raha hai.");
+    sendSignal({ type: "healthcare.confirm", received: false });
+  }
+
+  async function resumeFromPause() {
+    paused = false;
+    hideCallModal();
+    if (!conversationActive) {
+      await startConversation();
+      return;
+    }
+    await beginListening(false);
+  }
+
   async function handleSignalMessage(event) {
     let payload;
     try {
@@ -319,6 +459,36 @@
       setMode("thinking", "Thinking", "Ek second bhai, pehle wala jawab aa raha hai.");
       return;
     }
+    if (payload.type === "healthcare.call.connecting") {
+      setMode("speaking", "Connecting call", "Doctor se call jod rahe hain, thoda rukiye.");
+      return;
+    }
+    if (payload.type === "healthcare.call.queued") {
+      const idText = payload.call_id ? ` (${payload.call_id})` : "";
+      setMode("speaking", "Call connected", `Healthcare team se call jud gayi${idText}.`);
+      return;
+    }
+    if (payload.type === "healthcare.call.await_confirm") {
+      showCallConfirm(payload.timeout_ms || 30000);
+      return;
+    }
+    if (payload.type === "healthcare.call.open_dialer") {
+      if (payload.number) showDialer(payload.number);
+      return;
+    }
+    if (payload.type === "healthcare.call.paused") {
+      if (!callModal.hidden) return; // dialer popup already handling the pause
+      enterQuietPause(payload.hint);
+      return;
+    }
+    if (payload.type === "healthcare.call.deferred") {
+      setMode("speaking", "Reminder set", "Jab aap kahenge, MITRA doctor se baat karwa degi.");
+      return;
+    }
+    if (payload.type === "healthcare.call.failed") {
+      setMode("speaking", "Call issue", "Call abhi jud nahi payi, MITRA dobara koshish karegi.");
+      return;
+    }
     if (payload.type === "transcript.final") {
       addTranscript("user", payload.text);
       setMode("thinking", "Thinking", "MITRA ne suna. Ab jawab bana raha hai.");
@@ -338,6 +508,12 @@
       return;
     }
     if (payload.type === "assistant.audio.done") {
+      if (paused) {
+        speaking = false;
+        busy = false;
+        speakingStartedAt = 0;
+        return;
+      }
       if (!listening) {
         busy = false;
         speaking = false;
@@ -397,6 +573,9 @@
     autoStarting = false;
     bargeStartedAt = 0;
     speakingStartedAt = 0;
+    paused = false;
+    hideCallModal();
+    lockPreference(false);
 
     if (localStream) {
       for (const track of localStream.getTracks()) track.stop();
@@ -438,6 +617,17 @@
 
   logoutButton.addEventListener("click", logout);
   endButton.addEventListener("click", endSession);
+  callYesButton.addEventListener("click", onCallReceived);
+  callArrivedButton.addEventListener("click", onCallReceived);
+  callNoButton.addEventListener("click", onCallNotArrivedYet);
+  callDialClose.addEventListener("click", () => {
+    hideCallModal();
+    setMode("idle", "Paused", "Call karni ho to mic tap karke number dobara mangwa lo.");
+  });
+  callDialLink.addEventListener("click", () => {
+    // Let the tel: navigation proceed, then free the mic button for when they return.
+    window.setTimeout(hideCallModal, 800);
+  });
 
   if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection || !window.WebSocket) {
     setMode("error", "Browser not supported", "Latest Chrome ya Edge use karo.");

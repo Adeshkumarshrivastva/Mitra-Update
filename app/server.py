@@ -130,6 +130,10 @@ async def handle_ws_text(session: VoiceSession, raw: str) -> None:
         await session.cancel_turn(payload.get("reason", "client"))
     elif message_type == "interrupt":
         await session.interrupt()
+    elif message_type == "healthcare.confirm":
+        await session.handle_healthcare_confirmation(bool(payload.get("received")))
+    elif message_type == "call_preference":
+        session.set_call_preference(str(payload.get("value", "")))
     elif message_type == "end":
         await session.close()
     elif message_type == "ping":

@@ -54,6 +54,70 @@ docs/mitra-system-prompt.md
 
 It forces MITRA replies into short, speakable Hinglish in Devanagari script with the highway companion tone from the supplied docs.
 
+## Healthcare Escalation (Dhwani call)
+
+MITRA is not a doctor. When a driver reports a health problem, MITRA responds with
+empathy and basic self-care, then asks if they want to talk to the Healthcare Support
+team. The escalation uses Gemini **tool calling**: only after the driver clearly
+confirms does Gemini invoke `request_healthcare_call`, and only then does the server
+act on the driver's chosen calling preference.
+
+### Calling preference
+
+Before starting, the driver picks one of three options in the UI. The choice is sent to
+the server on connect and **locked for the rest of the conversation** (radios disable
+once the session starts); MITRA is told which mode is active so its wording matches.
+
+1. **Receive call from AI Agent** — Dhwani places an outbound AI-agent call to the
+   driver's number, followed by the "did you receive the call?" confirm + 30s retry flow.
+2. **Receive call from Human Agent** — a single Acefone `click_to_call` bridge rings the
+   human agent (`HUMAN_AGENT_NUMBER`) and the driver and connects them directly. MITRA
+   then shows the confirm popup and goes quiet so the driver and agent can talk; tap the
+   mic to bring MITRA back.
+3. **Call Human Agent** — the browser opens `tel:<HUMAN_AGENT_NUMBER>` so the driver taps
+   to dial directly. MITRA goes quiet.
+
+> Note on the Human Agent bridge: it uses `/v1/click_to_call` (Bearer auth) which bridges
+> `agent_number` + `destination_number` in one call. Acefone **cannot bridge a number to
+> itself**, so `HUMAN_AGENT_NUMBER` must differ from `HEALTHCARE_DRIVER_NUMBER` — otherwise
+> the call fails fast with a clear message. (The earlier `click_to_call_support` +
+> `/call/options` transfer path was dropped: the transfer needs the live call id from a
+> webhook, not the originate-response id, so it always returned "Invalid Call ID".)
+
+Flow:
+
+1. Driver reports an issue -> MITRA gives empathy + self-care, then asks to connect.
+2. Driver says yes -> MITRA asks "abhi ya thodi der baad?".
+3. "Abhi" -> Gemini calls the tool with `timing=now`. MITRA first speaks a short
+   "ruko, main call jod rahi hoon" line while the call is placed, then confirms.
+4. "Thodi der baad" -> `timing=later`; MITRA remembers. When the driver later says
+   "doctor se baat karwa do", MITRA connects without asking again.
+
+After the call is placed, MITRA **pauses** and a popup asks "Kya aapko call aa gayi?"
+with a 30s window that starts the moment the call is placed:
+
+- **Haan** (or "Call aa gayi") -> MITRA stays paused while the driver is on the call.
+  Tap the mic to resume MITRA afterwards.
+- **Nahi** -> a countdown shows the remaining time. If the call still has not arrived
+  when it hits 0, MITRA resumes with the context that the call was not received,
+  apologizes, and offers to try again.
+
+Config (`.env`):
+
+```env
+HEALTHCARE_ENABLED=True
+DHWANI_CALL_API_KEY=...
+DHWANI_CALL_BASE_URL=https://dhwani.timbleglance.com
+DHWANI_CALL_AGENT=default
+HEALTHCARE_DRIVER_NUMBER=6265833992
+HEALTHCARE_SUPPORT_NUMBER=8920530832
+```
+
+Testing note: Dhwani places the call to `HEALTHCARE_DRIVER_NUMBER` and handles the
+driver side itself. `HEALTHCARE_SUPPORT_NUMBER` (8920530832) is conceptual only and is
+**not** dialed during testing. If `DHWANI_CALL_API_KEY` is missing, the tool is disabled
+and MITRA falls back to normal calm conversation.
+
 ## WebSocket Contract
 
 The active endpoint is:
@@ -67,6 +131,8 @@ Inbound:
 ```json
 {"type":"offer","sdp":"..."}
 {"type":"ice","candidate":{}}
+{"type":"call_preference","value":"ai_agent"}
+{"type":"healthcare.confirm","received":true}
 ```
 
 Outbound:
@@ -75,6 +141,13 @@ Outbound:
 {"type":"answer","sdp":"..."}
 {"type":"transcript.final","text":"..."}
 {"type":"assistant.final","text":"..."}
+{"type":"healthcare.call.connecting"}
+{"type":"healthcare.call.queued","call_id":"...","status":"QUEUED"}
+{"type":"healthcare.call.await_confirm","timeout_ms":30000}
+{"type":"healthcare.call.paused","hint":"..."}
+{"type":"healthcare.call.open_dialer","number":"..."}
+{"type":"healthcare.call.deferred"}
+{"type":"healthcare.call.failed","message":"..."}
 {"type":"error","message":"..."}
 {"type":"closed"}
 ```
