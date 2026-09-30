@@ -437,7 +437,7 @@
     setMode("speaking", "Call connected", "Neeche batao — call aa gayi?");
   }
 
-  function showDialer(number) {
+  function showDialer(number, tel) {
     paused = true;
     listening = false;
     busy = false;
@@ -447,9 +447,9 @@
     maxCaptureTimer = null;
     clearCallTimer();
 
-    callDialLink.href = `tel:${number}`;
+    callDialLink.href = `tel:${String(tel || number).replace(/[^\d+]/g, "")}`;
     callDialNumber.textContent = number;
-    callModalText.textContent = "Healthcare team ka number";
+    callModalText.textContent = "Doctor se baat karne ke liye is helpline number par call karein";
     callModalTimer.hidden = true;
     callModalActions.hidden = true;
     callWaitActions.hidden = true;
@@ -555,7 +555,7 @@
       return;
     }
     if (payload.type === "healthcare.call.open_dialer") {
-      if (payload.number) showDialer(payload.number);
+      if (payload.number) showDialer(payload.number, payload.tel);
       return;
     }
     if (payload.type === "healthcare.call.paused") {

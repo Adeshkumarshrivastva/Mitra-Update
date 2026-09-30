@@ -16,6 +16,9 @@ from aiortc.mediastreams import MediaStreamError, MediaStreamTrack
 
 from .companion import (
     GREETING_LINE,
+    HELPLINE,
+    HELPLINE_SPOKEN,
+    HELPLINE_TEL,
     IDLE_NUDGE_SECONDS,
     MAX_IDLE_NUDGES,
     OPEN_QUESTION,
@@ -68,11 +71,19 @@ CALL_PREFERENCES = {CALL_PREF_AI_AGENT, CALL_PREF_HUMAN_AGENT, CALL_PREF_CALL_HU
 
 HEALTHCARE_HUMAN_SUCCESS_LINE = "कॉल जोड़ दी है, हमारी हेल्थकेयर टीम अभी आपसे बात करेगी, थोड़ा रुकिए।"
 HEALTHCARE_HUMAN_PAUSE_HINT = "आप बात कर लीजिए, मैं चुप रहती हूँ। ज़रूरत हो तो माइक दबाइएगा।"
-HEALTHCARE_DIALER_LINE = "मैं आपके फ़ोन में हेल्थकेयर टीम का नंबर खोल रही हूँ, आप कॉल कर लीजिए।"
+HEALTHCARE_DIALER_LINE = (
+    "भैया, अगर आप डॉक्टर से बात करना चाहते हैं तो स्क्रीन पर दिख रहे नंबर पर कॉल कीजिए। "
+    "ये एक हेल्पलाइन नंबर है, वहाँ आपकी बात करवा दी जाएगी।"
+)
 
 MINDCHECK_LOG_NAME = "mindcheck_escalations.jsonl"
-MINDCHECK_BAD_LINE = "इसके लिए डॉक्टर से बात करना बहुत ज़रूरी है, इसलिए मैं अभी डॉक्टर को कॉल लगा रही हूँ, थोड़ा रुकिए।"
-MINDCHECK_REQUEST_LINE = "भैया, ठीक है, मैं अभी डॉक्टर को कॉल लगा रही हूँ, थोड़ा रुकिए।"
+MINDCHECK_BAD_LINE = (
+    "इसके लिए डॉक्टर से बात करना बहुत ज़रूरी है। स्क्रीन पर हेल्पलाइन नंबर दिख रहा है, "
+    "डॉक्टर से बात करने के लिए अभी उस नंबर पर कॉल कीजिए।"
+)
+MINDCHECK_REQUEST_LINE = (
+    "भैया, ठीक है। स्क्रीन पर हेल्पलाइन नंबर दिख रहा है, डॉक्टर से बात करने के लिए उस नंबर पर कॉल कीजिए।"
+)
 MINDCHECK_CALL_INSTRUCTIONS = (
     "Driver ka Mind Check result bahut kharab aaya hai (score {score}, {band}). "
     "Doctor se turant baat karwana zaroori hai."
@@ -325,6 +336,8 @@ class VoiceSession:
         topic = match_topic(transcript, self._topics_answered, SAFETY_TOPICS if self._mindcheck_done else None)
         if topic is not None:
             self._topics_answered.add(topic.name)
+            if topic.name in {"crisis", "emergency"}:
+                await self._show_helpline()
             await self._speak_static(pick_reply(topic), turn_id, f"topic:{topic.name}")
             return
         await self.generate_reply(turn_id)
@@ -342,8 +355,8 @@ class VoiceSession:
             self.user_profile,
             healthcare_enabled=healthcare_enabled,
             healthcare_deferred=self._healthcare_call_deferred,
-            call_preference=self.call_preference,
-            call_number=self.settings.human_agent_number or self.settings.healthcare_support_number,
+            call_preference=CALL_PREF_CALL_HUMAN,
+            call_number=HELPLINE_SPOKEN,
         )
         function_call = result.function_call
         if function_call and function_call.get("name") == HEALTHCARE_CALL_TOOL_NAME:
@@ -434,15 +447,11 @@ class VoiceSession:
             return
 
         # timing == "now": the model only calls this after the driver has confirmed.
-        if self.call_preference == CALL_PREF_HUMAN_AGENT:
-            await self._connect_human_agent(tts, spoken, issue_summary, turn_id)
-        elif self.call_preference == CALL_PREF_CALL_HUMAN:
-            await self._open_phone_dialer(tts, spoken, turn_id)
-        else:
-            await self._connect_ai_agent(tts, spoken, issue_summary, turn_id)
+        # The model's own wording is ignored here: the driver always gets the same clear line plus the number on screen.
+        await self._open_phone_dialer(tts, "", turn_id)
 
     async def handle_mindcheck_result(self, result: dict) -> None:
-        """Speak the Mind Check verdict; a bad score always triggers the IVR call to the doctors' number."""
+        """Speak the Mind Check verdict; a bad score puts the helpline number on screen."""
         if self._closed:
             return
         self._preference_locked = True
@@ -529,21 +538,9 @@ class VoiceSession:
                 await self.wait_for_playback_done(turn_id)
                 return
 
-            await self.send_event({"type": "healthcare.call.connecting", "mode": CALL_PREF_AI_AGENT})
-            call_task = asyncio.create_task(self._place_doctor_call(score, band))
-            action = "doctor_call_requested"
+            action = "helpline_shown"
+            await self._show_helpline()
             await self._speak_text(tts, line, turn_id)
-            try:
-                call_result = await call_task
-            except DhwaniCallError as exc:
-                action, error = "doctor_call_failed", str(exc)
-                await self._call_failed(tts, line, str(exc), turn_id)
-                return
-            action, call_id = "doctor_call_placed", str(call_result.get("call_id") or "")
-            self._on_call = True
-            await self.send_event(
-                {"type": "healthcare.call.doctor_called", "call_id": call_result.get("call_id"), "status": call_result.get("status")}
-            )
             await self.wait_for_playback_done(turn_id)
         except asyncio.CancelledError:
             logger.info("mindcheck.cancelled session_id=%s turn=%s", self.session_id, turn_id)
@@ -644,10 +641,8 @@ class VoiceSession:
 
     async def _open_phone_dialer(self, tts, spoken: str, turn_id: int) -> None:
         line = spoken or HEALTHCARE_DIALER_LINE
-        number = self.settings.human_agent_number or self.settings.healthcare_support_number
         self._healthcare_call_deferred = False
-        self._on_call = True
-        await self.send_event({"type": "healthcare.call.open_dialer", "number": number})
+        await self._show_helpline()
         await self.send_event({"type": "healthcare.call.paused", "hint": HEALTHCARE_HUMAN_PAUSE_HINT})
         await self.send_event({"type": "assistant.final", "text": line})
         self.conversation_messages.append({"role": "assistant", "content": line})
@@ -748,13 +743,13 @@ class VoiceSession:
                 self._processing_task = None
 
     def _healthcare_tool_ready(self) -> bool:
-        if not self.settings.healthcare_enabled:
-            return False
-        if self.call_preference == CALL_PREF_HUMAN_AGENT:
-            return self.settings.human_call_ready()
-        if self.call_preference == CALL_PREF_CALL_HUMAN:
-            return True
-        return self.settings.healthcare_call_ready()
+        # The doctor is reached by the driver calling the helpline number, so nothing has to be configured.
+        return self.settings.healthcare_enabled
+
+    async def _show_helpline(self) -> None:
+        """Put the helpline number on the driver's screen (tap to call) and pause MITRA while they phone."""
+        self._on_call = True
+        await self.send_event({"type": "healthcare.call.open_dialer", "number": HELPLINE, "tel": HELPLINE_TEL})
 
     async def _place_healthcare_call(self, issue_summary: str) -> dict:
         client = DhwaniCallClient(

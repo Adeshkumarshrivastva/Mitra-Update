@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass
 from urllib import error, parse, request
 
@@ -68,7 +69,7 @@ Healthcare support flow:
   2. Suggest simple self-care: aaram, paani, halka khana, gehri saans, surakshit jagah par ruk jana.
   3. Then ask once: "अगर इसके बाद भी ठीक न लगे तो मैं डॉक्टर से आपकी बात करवा सकती हूँ। क्या आप डॉक्टर से बात करना चाहेंगे?"
 - If the saathi says haan/yes: ask "क्या आप अभी बात करना चाहेंगे या थोड़ी देर बाद?"
-- Only when the saathi clearly confirms they want the call NOW (abhi, haan abhi, kar do, jod do): call the tool request_healthcare_call with timing="now" and a short issue_summary. In the SAME reply also speak one short calm line telling them to wait, for example: "ठीक है भाई, एक सेकंड रुकिए, मैं अभी कॉल जोड़ रही हूँ।" Never call the tool before the saathi has confirmed.
+- Only when the saathi clearly confirms they want the call NOW (abhi, haan abhi, kar do, jod do): call the tool request_healthcare_call with timing="now" and a short issue_summary. The app then shows the helpline number on the driver's screen. In the SAME reply speak one short calm line, for example: "ठीक है भैया, स्क्रीन पर हेल्पलाइन नंबर दिख रहा है, डॉक्टर से बात करने के लिए उस पर कॉल कीजिए।" Never say you are connecting or dialing the call yourself. NEVER write the tool name or any code, brackets or parameters in your spoken text. Never call the tool before the saathi has confirmed.
 - If the saathi says thodi der baad / journey ke baad / abhi nahi: call request_healthcare_call with timing="later", and reassure them, for example: "बिलकुल, जब भी आप कहेंगे मैं उसी समय डॉक्टर से आपकी बात करवा दूँगी।"
 - If earlier the saathi deferred the call and now says "डॉक्टर से बात करवा दो" (or similar), do NOT ask again: directly call request_healthcare_call with timing="now" plus the short wait line.
 - Never diagnose an illness. Never suggest, name, or prescribe any medicine or dose. If asked which medicine to take, gently decline and offer to connect them to the healthcare team instead.
@@ -250,6 +251,9 @@ def _contents(
     return contents
 
 
+_LEAKED_CALL = re.compile(r"request_healthcare_call\s*\([^)]*\)?", re.IGNORECASE)
+
+
 def _parse_response(payload: dict) -> tuple[str, dict | None]:
     texts: list[str] = []
     function_call: dict | None = None
@@ -265,6 +269,13 @@ def _parse_response(payload: dict) -> tuple[str, dict | None]:
                     "args": call.get("args", {}) or {},
                 }
     combined = " ".join(text.strip() for text in texts if text.strip()).strip()
+    # The model sometimes writes the tool call as plain text; never speak or show it, and still honour it.
+    leaked = _LEAKED_CALL.search(combined)
+    if leaked:
+        combined = _LEAKED_CALL.sub("", combined).strip()
+        if function_call is None:
+            timing = "later" if re.search(r"timing\s*=\s*['\"]later", leaked.group(0)) else "now"
+            function_call = {"name": "request_healthcare_call", "args": {"timing": timing}}
     return combined, function_call
 
 
