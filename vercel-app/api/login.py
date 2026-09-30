@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _lib.web import clean, login_pin, make_token, read_json, send_json, session_cookie  # noqa: E402
+from _lib.web import clean, is_https, login_pin, make_token, read_json, send_json, session_cookie  # noqa: E402
 
 
 class handler(BaseHTTPRequestHandler):
@@ -21,7 +21,7 @@ class handler(BaseHTTPRequestHandler):
             "truck": clean(data.get("truck"), "Truck"),
             "route": clean(data.get("route"), "Highway"),
         }
-        send_json(self, 200, {"ok": True, "profile": profile}, cookie=session_cookie(make_token(profile)))
+        send_json(self, 200, {"ok": True, "profile": profile}, cookie=session_cookie(make_token(profile), is_https(self)))
 
     def log_message(self, *args):
         pass

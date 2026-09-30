@@ -62,12 +62,18 @@ def current_profile(handler: Any) -> dict[str, str] | None:
     return read_token(morsel.value) if morsel else None
 
 
-def session_cookie(token: str) -> str:
-    return f"{COOKIE_NAME}={token}; Max-Age={SESSION_SECONDS}; Path=/; HttpOnly; Secure; SameSite=Lax"
+def is_https(handler: Any) -> bool:
+    """Vercel always sets x-forwarded-proto. On http://localhost there is none, and a Secure cookie would be dropped."""
+    return handler.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https"
+
+
+def session_cookie(token: str, secure: bool = True) -> str:
+    flag = "; Secure" if secure else ""
+    return f"{COOKIE_NAME}={token}; Max-Age={SESSION_SECONDS}; Path=/; HttpOnly{flag}; SameSite=Lax"
 
 
 def clear_cookie() -> str:
-    return f"{COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"
+    return f"{COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
 
 
 def read_json(handler: Any) -> dict[str, Any]:

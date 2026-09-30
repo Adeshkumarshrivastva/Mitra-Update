@@ -19,3 +19,11 @@ Free-tier friendly version of MITRA. No always-on server: the browser listens (s
   If you change the Hindi replies or the prompt there, copy the files here too.
 - Mind Check results stay in the browser (localStorage); there is no database.
 - Voice quality depends on the phone or browser's Hindi voice (Android Chrome and desktop Chrome have one).
+
+## Run it on your laptop
+```
+cd vercel-app
+python dev_server.py
+```
+Open http://localhost:3000 in Chrome, log in with your PIN and tap the mic. It reads `GEMINI_API_KEY` from the `.env` in
+this folder or the parent folder. Nothing to install (Python 3.10+).
