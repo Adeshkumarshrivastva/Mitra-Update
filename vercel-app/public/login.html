@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/jpeg" href="/assets/Mitra.jpeg">
+    <title>MITRA Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body class="login-body">
+    <main class="login-shell">
+      <section class="login-panel" aria-label="MITRA login">
+
+        <div class="login-brand">
+          <img class="mark" src="/assets/Mitra.jpeg" alt="MITRA logo">
+          <div>
+            <h1>MITRA</h1>
+            <p>Aapka apna highway saathi</p>
+          </div>
+        </div>
+
+        <form id="loginForm" class="login-form">
+          <label>
+            Name
+            <input id="nameInput" name="name" autocomplete="name" placeholder="Adesh" value="Adesh" required>
+          </label>
+          <label>
+            Truck number
+            <input id="truckInput" name="truck" autocomplete="off" placeholder="HR 55 AB 1234">
+          </label>
+          <label>
+            Route
+            <input id="routeInput" name="route" autocomplete="off" placeholder="Delhi to Jaipur">
+          </label>
+          <label>
+            PIN
+            <input id="pinInput" name="pin" inputmode="numeric" autocomplete="current-password" placeholder="1234" required>
+          </label>
+          <button class="login-button" type="submit">Start MITRA</button>
+          <p id="loginStatus" class="login-status"></p>
+        </form>
+
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("loginForm");
+      const statusText = document.getElementById("loginStatus");
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        statusText.textContent = "Checking...";
+        const payload = {
+          name: document.getElementById("nameInput").value,
+          truck: document.getElementById("truckInput").value,
+          route: document.getElementById("routeInput").value,
+          pin: document.getElementById("pinInput").value,
+        };
+        try {
+          const response = await fetch("/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!response.ok) throw new Error("PIN galat hai");
+          window.location.href = "/";
+        } catch (error) {
+          statusText.textContent = error.message || "Login issue";
+        }
+      });
+    </script>
+  </body>
+</html>

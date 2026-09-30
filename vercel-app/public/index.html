@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/jpeg" href="/assets/Mitra.jpeg">
+    <title>MITRA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="cockpit" aria-label="MITRA cockpit">
+
+        <!-- Full-width header -->
+        <header class="topbar">
+          <div class="brand-row">
+            <img class="mark" src="/assets/Mitra.jpeg" alt="MITRA logo">
+            <div>
+              <h1>MITRA</h1>
+              <p id="profileLine">Aapka apna highway saathi</p>
+            </div>
+          </div>
+          <button id="logoutButton" class="icon-button" type="button" aria-label="Logout" title="Logout">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+              <path d="M9 3A5 5 0 1 1 5 3"/>
+              <line x1="7" y1="0.5" x2="7" y2="7"/>
+            </svg>
+          </button>
+        </header>
+
+        <!-- Two-column body -->
+        <div class="cockpit-body">
+
+          <!-- Left: controls -->
+          <div class="controls-col">
+
+            <div class="trip-strip" aria-label="session status">
+              <div><span>Mode</span><strong>Saathi</strong></div>
+              <div><span>State</span><strong id="safetyState">Ready</strong></div>
+              <div><span>Time</span><strong id="durationText">00:00</strong></div>
+            </div>
+
+            <div class="stage" aria-live="polite">
+              <p id="statusText" class="status">Tap to start</p>
+              <button id="micButton" class="mic-button" type="button" aria-label="Talk to MITRA">
+                <span class="pulse" aria-hidden="true"></span>
+                <svg class="mic-icon" width="22" height="32" viewBox="0 0 22 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="6" y="1" width="10" height="17" rx="5"/>
+                  <path d="M1 16c0 5.52 4.48 10 10 10s10-4.48 10-10"/>
+                  <line x1="11" y1="26" x2="11" y2="31"/>
+                  <line x1="7" y1="31" x2="15" y2="31"/>
+                </svg>
+              </button>
+              <p id="hintText" class="hint">Ek baar tap karo, phir direct baat chalu.</p>
+              <button id="endButton" class="secondary-button" type="button">End session</button>
+            </div>
+
+            <div class="meter" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+
+          </div>
+
+          <!-- Right: transcript -->
+          <section class="transcript-wrap" aria-label="Conversation transcript">
+            <div class="transcript-head">
+              <h2>Conversation</h2>
+              <button id="clearTranscriptButton" class="text-button" type="button">Clear</button>
+            </div>
+            <div id="transcriptList" class="transcript-list">
+              <p class="empty-transcript">Abhi tak koi baat nahi hui.</p>
+            </div>
+          </section>
+
+        </div><!-- /.cockpit-body -->
+
+      </section>
+    </main>
+
+    <div id="mindcheck" class="mindcheck" hidden>
+      <div id="mindcheckBody" class="mindcheck-card"></div>
+    </div>
+
+    <div id="callModal" class="call-modal" hidden>
+      <div class="call-modal-card" role="dialog" aria-modal="true" aria-labelledby="callModalText">
+        <div class="call-modal-icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
+        </div>
+        <p id="callModalText" class="call-modal-text">Kya aapko call aa gayi?</p>
+        <p id="callModalTimer" class="call-modal-timer" hidden>30s</p>
+        <div id="callModalActions" class="call-modal-actions">
+          <button id="callYesButton" class="call-modal-yes" type="button">Haan, aa gayi</button>
+          <button id="callNoButton" class="call-modal-no" type="button">Nahi aayi</button>
+        </div>
+        <div id="callWaitActions" class="call-modal-actions" hidden>
+          <button id="callArrivedButton" class="call-modal-yes" type="button">Call aa gayi</button>
+        </div>
+        <div id="callDialActions" class="call-modal-actions call-dial-actions" hidden>
+          <a id="callDialLink" class="call-modal-yes call-dial-link" href="tel:">
+            <span id="callDialNumber"></span> par call karein
+          </a>
+          <button id="callDialClose" class="call-modal-no" type="button">Band karein</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script src="./mindcheck-data.js"></script>
+    <script src="./mindcheck-report.js"></script>
+    <script src="./mindcheck-store.js"></script>
+    <script src="./mindcheck.js"></script>
+  </body>
+</html>

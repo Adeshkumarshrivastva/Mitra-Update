@@ -1,0 +1,9 @@
+{
+  "framework": null,
+  "buildCommand": null,
+  "outputDirectory": "public",
+  "cleanUrls": true,
+  "functions": {
+    "api/*.py": { "maxDuration": 30 }
+  }
+}
