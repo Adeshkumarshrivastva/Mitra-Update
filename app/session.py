@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -12,12 +14,27 @@ from aiohttp import web
 from aiortc import RTCPeerConnection
 from aiortc.mediastreams import MediaStreamError, MediaStreamTrack
 
+from .companion import (
+    GREETING_LINE,
+    IDLE_NUDGE_SECONDS,
+    MAX_IDLE_NUDGES,
+    OPEN_QUESTION,
+    SAFETY_TOPICS,
+    SELF_HARM_LINE,
+    idle_nudge,
+    match_topic,
+    mindcheck_advice,
+    mindcheck_summary,
+    pick_reply,
+)
 from .audio import AudioBuffer, TTS_PCM_SAMPLE_RATE, pcm_to_wav_bytes
 from .dhwani_calls import DhwaniCallClient, DhwaniCallError
 from .dialer_calls import DialerCallClient, DialerCallError
 from .llm_gemini import GeminiLLM
-from .settings import Settings
+from .settings import DOCTOR_CALL_STATIC, DOCTOR_IVR_NUMBER, Settings
 from .stt_elevenlabs import ElevenLabsSTT
+from .stt_gemini import GeminiSTT
+from .tts_edge import EdgeTTS
 from .tts_elevenlabs import ElevenLabsTTS
 from .webrtc import QueuedAudioTrack, accept_offer, add_browser_ice, close_peer_connection, create_peer_connection
 
@@ -53,6 +70,23 @@ HEALTHCARE_HUMAN_SUCCESS_LINE = "कॉल जोड़ दी है, हमा
 HEALTHCARE_HUMAN_PAUSE_HINT = "आप बात कर लीजिए, मैं चुप रहती हूँ। ज़रूरत हो तो माइक दबाइएगा।"
 HEALTHCARE_DIALER_LINE = "मैं आपके फ़ोन में हेल्थकेयर टीम का नंबर खोल रही हूँ, आप कॉल कर लीजिए।"
 
+MINDCHECK_LOG_NAME = "mindcheck_escalations.jsonl"
+MINDCHECK_BAD_LINE = "इसके लिए डॉक्टर से बात करना बहुत ज़रूरी है, इसलिए मैं अभी डॉक्टर को कॉल लगा रही हूँ, थोड़ा रुकिए।"
+MINDCHECK_REQUEST_LINE = "भैया, ठीक है, मैं अभी डॉक्टर को कॉल लगा रही हूँ, थोड़ा रुकिए।"
+MINDCHECK_CALL_INSTRUCTIONS = (
+    "Driver ka Mind Check result bahut kharab aaya hai (score {score}, {band}). "
+    "Doctor se turant baat karwana zaroori hai."
+)
+
+# A plain hello ("hello mitra", "नमस्ते मित्रा जी") gets the fixed, instant welcome from companion.py instead of a model reply.
+GREETING_WORDS = {
+    "hello", "helo", "hallo", "hi", "hii", "hey", "namaste", "namaskar",
+    "हेलो", "हैलो", "हलो", "हेल्लो", "हाय", "हाई", "नमस्ते", "नमस्कार",
+}
+GREETING_FILLER_WORDS = {"mitra", "mitr", "ji", "jee", "मित्रा", "मित्र", "जी"}
+# Latin words, or Devanagari runs without the danda punctuation marks.
+GREETING_TOKEN = re.compile("[a-z]+|[ऀ-ॣ०-ॿ]+")
+
 
 @dataclass
 class VoiceSession:
@@ -79,16 +113,25 @@ class VoiceSession:
     _healthcare_call_deferred: bool = False
     call_preference: str = CALL_PREF_AI_AGENT
     _preference_locked: bool = False
+    _topics_answered: set[str] = field(default_factory=set)
+    _idle_task: asyncio.Task | None = None
+    _idle_nudges: int = 0
+    _on_call: bool = False
+    _mindcheck_done: bool = False
+    _last_activity: float = field(default_factory=time.monotonic)
 
     async def handle_offer(self, sdp: str) -> str:
         self.settings.require_voice_pipeline()
         self.peer_connection, self.outgoing_audio_track = await create_peer_connection(
             self._on_audio_track,
             self._on_connection_state,
+            self.settings.ice_servers,
         )
         logger.info("session.offer session_id=%s", self.session_id)
         answer_sdp = await accept_offer(self.peer_connection, sdp)
         logger.info("session.answer session_id=%s", self.session_id)
+        if self._idle_task is None:
+            self._idle_task = asyncio.create_task(self._idle_loop())
         return answer_sdp
 
     async def handle_ice(self, candidate: dict[str, Any] | None) -> None:
@@ -170,6 +213,25 @@ class VoiceSession:
             self._current_audio = None
             self._current_frames = 0
 
+    async def handle_browser_transcript(self, text: str) -> None:
+        """Start a turn from speech already recognized in the browser (STT_PROVIDER=browser)."""
+        if self._closed:
+            return
+        # First real turn locks the preference for the rest of the conversation.
+        self._preference_locked = True
+        self._last_activity = time.monotonic()
+        if self._processing_task is not None and not self._processing_task.done():
+            await self.send_event({"type": "turn.busy"})
+            return
+        transcript = " ".join(text.split())
+        if not transcript:
+            await self.send_event({"type": "turn.empty", "message": "No speech heard"})
+            return
+        self._turn_seq += 1
+        turn_id = self._turn_seq
+        logger.info("turn.browser_transcript session_id=%s turn=%s chars=%s", self.session_id, turn_id, len(transcript))
+        self._processing_task = asyncio.create_task(self._process_turn(b"", 0, turn_id, transcript=transcript))
+
     async def interrupt(self) -> None:
         logger.info("session.interrupt session_id=%s", self.session_id)
         if self._processing_task is not None and not self._processing_task.done():
@@ -215,10 +277,19 @@ class VoiceSession:
             if should_stop:
                 await self.stop_turn("max_duration")
 
-    async def _process_turn(self, pcm_bytes: bytes, sample_rate: int, turn_id: int) -> None:
+    async def _process_turn(
+        self,
+        pcm_bytes: bytes,
+        sample_rate: int,
+        turn_id: int,
+        transcript: str | None = None,
+    ) -> None:
         task = asyncio.current_task()
         try:
-            await self.transcribe_with_scribe_v2(pcm_bytes, sample_rate, turn_id)
+            if transcript is None:
+                await self.transcribe_audio(pcm_bytes, sample_rate, turn_id)
+            else:
+                await self.respond_to_transcript(transcript, turn_id)
         except asyncio.CancelledError:
             logger.info("turn.cancelled session_id=%s turn=%s", self.session_id, turn_id)
         except Exception as exc:
@@ -227,32 +298,49 @@ class VoiceSession:
             if self._processing_task is task:
                 self._processing_task = None
 
-    async def transcribe_with_scribe_v2(self, pcm_bytes: bytes, sample_rate: int, turn_id: int) -> None:
-        logger.info("pipeline.transcribe_with_scribe_v2.start session_id=%s turn=%s", self.session_id, turn_id)
+    async def transcribe_audio(self, pcm_bytes: bytes, sample_rate: int, turn_id: int) -> None:
+        provider = self.settings.stt_provider
+        logger.info("pipeline.transcribe.start session_id=%s turn=%s provider=%s", self.session_id, turn_id, provider)
         wav_bytes = pcm_to_wav_bytes(pcm_bytes, sample_rate)
-        transcript = await ElevenLabsSTT(
-            self.settings.elevenlabs_api_key,
-            self.settings.elevenlabs_stt_model,
-        ).transcribe_wav(wav_bytes)
+        transcript = await self._stt().transcribe_wav(wav_bytes)
         logger.info(
-            "pipeline.transcribe_with_scribe_v2.done session_id=%s turn=%s chars=%s",
+            "pipeline.transcribe.done session_id=%s turn=%s provider=%s chars=%s",
             self.session_id,
             turn_id,
+            provider,
             len(transcript),
         )
+        if not transcript:
+            await self.send_event({"type": "turn.empty", "message": "No speech heard"})
+            return
+        await self.respond_to_transcript(transcript, turn_id)
+
+    async def respond_to_transcript(self, transcript: str, turn_id: int) -> None:
         await self.send_event({"type": "transcript.final", "text": transcript})
         self.conversation_messages.append({"role": "user", "content": transcript})
-        await self.generate_with_gemini(turn_id)
+        self._idle_nudges = 0
+        if is_greeting(transcript):
+            await self._speak_greeting(turn_id)
+            return
+        topic = match_topic(transcript, self._topics_answered, SAFETY_TOPICS if self._mindcheck_done else None)
+        if topic is not None:
+            self._topics_answered.add(topic.name)
+            await self._speak_static(pick_reply(topic), turn_id, f"topic:{topic.name}")
+            return
+        await self.generate_reply(turn_id)
 
-    async def generate_with_gemini(self, turn_id: int, allow_tools: bool = True) -> None:
-        logger.info("pipeline.generate_with_gemini.start session_id=%s turn=%s", self.session_id, turn_id)
-        result = await GeminiLLM(
-            self.settings.gemini_api_key,
-            self.settings.gemini_model,
-        ).generate(
+    async def generate_reply(self, turn_id: int, allow_tools: bool = True) -> None:
+        logger.info(
+            "pipeline.generate.start session_id=%s turn=%s provider=%s",
+            self.session_id,
+            turn_id,
+            self.settings.llm_provider,
+        )
+        healthcare_enabled = allow_tools and self._healthcare_tool_ready()
+        result = await self._llm().generate(
             self.conversation_messages,
             self.user_profile,
-            healthcare_enabled=allow_tools and self._healthcare_tool_ready(),
+            healthcare_enabled=healthcare_enabled,
             healthcare_deferred=self._healthcare_call_deferred,
             call_preference=self.call_preference,
             call_number=self.settings.human_agent_number or self.settings.healthcare_support_number,
@@ -260,7 +348,7 @@ class VoiceSession:
         function_call = result.function_call
         if function_call and function_call.get("name") == HEALTHCARE_CALL_TOOL_NAME:
             logger.info(
-                "pipeline.generate_with_gemini.tool session_id=%s turn=%s args=%s",
+                "pipeline.generate.tool session_id=%s turn=%s args=%s",
                 self.session_id,
                 turn_id,
                 function_call.get("args"),
@@ -270,14 +358,61 @@ class VoiceSession:
 
         assistant_text = result.text
         logger.info(
-            "pipeline.generate_with_gemini.done session_id=%s turn=%s chars=%s",
+            "pipeline.generate.done session_id=%s turn=%s chars=%s",
             self.session_id,
             turn_id,
             len(assistant_text),
         )
         self.conversation_messages.append({"role": "assistant", "content": assistant_text})
         await self.send_event({"type": "assistant.final", "text": assistant_text})
-        await self.synthesize_with_elevenlabs(assistant_text, turn_id)
+        await self.synthesize_speech(assistant_text, turn_id)
+
+    async def _idle_loop(self) -> None:
+        """If the driver goes quiet after talking to MITRA, check in on them (a few times, never during a call)."""
+        try:
+            while not self._closed:
+                await asyncio.sleep(5)
+                idle = time.monotonic() - self._last_activity
+                busy = self._capturing or (self._processing_task is not None and not self._processing_task.done())
+                if (
+                    idle < IDLE_NUDGE_SECONDS
+                    or busy
+                    or self._on_call
+                    or self._turn_seq == 0
+                    or self._idle_nudges >= MAX_IDLE_NUDGES
+                ):
+                    continue
+                line = idle_nudge(self._idle_nudges)
+                self._idle_nudges += 1
+                self._last_activity = time.monotonic()
+                self._turn_seq += 1
+                turn_id = self._turn_seq
+                logger.info("session.idle_nudge session_id=%s nudge=%s", self.session_id, self._idle_nudges)
+                self._processing_task = asyncio.create_task(self._process_nudge(line, turn_id))
+        except asyncio.CancelledError:
+            pass
+
+    async def _process_nudge(self, line: str, turn_id: int) -> None:
+        task = asyncio.current_task()
+        try:
+            await self._speak_static(line, turn_id, "idle_nudge")
+        except asyncio.CancelledError:
+            logger.info("turn.cancelled session_id=%s turn=%s", self.session_id, turn_id)
+        except Exception as exc:  # noqa: BLE001 - surface any pipeline failure to the client
+            await self.fail("idle_nudge", exc)
+        finally:
+            if self._processing_task is task:
+                self._processing_task = None
+
+    async def _speak_greeting(self, turn_id: int) -> None:
+        await self._speak_static(GREETING_LINE, turn_id, "greeting")
+
+    async def _speak_static(self, line: str, turn_id: int, label: str) -> None:
+        """Say a fixed line right away and keep it in the conversation so the model knows what was said."""
+        logger.info("pipeline.static session_id=%s turn=%s kind=%s", self.session_id, turn_id, label)
+        self.conversation_messages.append({"role": "assistant", "content": line})
+        await self.send_event({"type": "assistant.final", "text": line})
+        await self.synthesize_speech(line, turn_id)
 
     async def _handle_healthcare_call(self, function_call: dict, spoken_text: str, turn_id: int) -> None:
         args = function_call.get("args", {}) or {}
@@ -285,11 +420,7 @@ class VoiceSession:
         issue_summary = str(args.get("issue_summary", "") or "").strip()
         spoken = (spoken_text or "").strip()
 
-        tts = ElevenLabsTTS(
-            self.settings.elevenlabs_api_key,
-            self.settings.elevenlabs_tts_model,
-            self.settings.elevenlabs_tts_voice_id,
-        )
+        tts = self._tts()
         await self.send_event({"type": "assistant.audio.started"})
 
         if timing == "later":
@@ -309,6 +440,137 @@ class VoiceSession:
             await self._open_phone_dialer(tts, spoken, turn_id)
         else:
             await self._connect_ai_agent(tts, spoken, issue_summary, turn_id)
+
+    async def handle_mindcheck_result(self, result: dict) -> None:
+        """Speak the Mind Check verdict; a bad score always triggers the IVR call to the doctors' number."""
+        if self._closed:
+            return
+        self._preference_locked = True
+        if self._processing_task is not None and not self._processing_task.done():
+            await self.send_event({"type": "turn.busy"})
+            return
+        self._turn_seq += 1
+        turn_id = self._turn_seq
+        self._processing_task = asyncio.create_task(self._process_mindcheck_result(result, turn_id))
+
+    def _log_mindcheck(self, result: dict, tier: str, action: str, call_id: str = "", error: str = "") -> None:
+        """Append one line per Mind Check to logs/mindcheck_escalations.jsonl, so every escalation is auditable."""
+        profile = self.user_profile or {}
+        record = {
+            "at": datetime.now(timezone.utc).isoformat(),
+            "session_id": self.session_id,
+            "name": profile.get("name", ""),
+            "truck": profile.get("truck", ""),
+            "route": profile.get("route", ""),
+            "kind": result.get("kind", ""),
+            "score": result.get("score"),
+            "band": result.get("band", ""),
+            "tier": tier,
+            "self_harm": bool(result.get("selfHarm")),
+            "face_concern": bool(result.get("faceConcern")),
+            "action": action,
+            "doctor_number": DOCTOR_IVR_NUMBER if action.startswith("doctor_call") else "",
+            "simulated": DOCTOR_CALL_STATIC if action.startswith("doctor_call") else False,
+            "call_id": call_id,
+            "error": error,
+        }
+        try:
+            self.settings.log_dir.mkdir(parents=True, exist_ok=True)
+            with (self.settings.log_dir / MINDCHECK_LOG_NAME).open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except OSError as exc:
+            logger.warning("mindcheck.log.failed session_id=%s error=%s", self.session_id, exc)
+
+    async def _process_mindcheck_result(self, result: dict, turn_id: int) -> None:
+        tier = str(result.get("tier", "")) or "normal"
+        action, call_id, error = "none", "", ""
+        try:
+            score = int(result.get("score", 0))
+            band = str(result.get("band", ""))
+            # Severe / Moderately severe (PHQ-9, GAD-7) or any self-harm answer means "call the doctor".
+            bad = result.get("bucket") == "high" or bool(result.get("selfHarm")) or tier == "urgent"
+            # Pressing "Call the doctor" is an explicit request, so the call is placed whatever the tier is.
+            requested = bool(result.get("requestDoctor"))
+            call_doctor = bad or requested
+            logger.info("mindcheck.result session_id=%s score=%s bad=%s", self.session_id, score, bad)
+            kind = str(result.get("kind", ""))
+            raw_symptoms = result.get("symptoms")
+            symptoms = [str(item).strip()[:80] for item in raw_symptoms[:3] if str(item).strip()] if isinstance(raw_symptoms, list) else []
+            concern = tier == "elevated" or bool(result.get("faceConcern"))
+            action = "advice_only" if concern and not call_doctor else "none"
+            summary = mindcheck_summary(kind, band, symptoms)
+            self_harm_line = f" {SELF_HARM_LINE}" if result.get("selfHarm") else ""
+            if bad:
+                line = f"{summary} {mindcheck_advice('high')}{self_harm_line} {MINDCHECK_BAD_LINE}"
+            elif requested:
+                line = MINDCHECK_REQUEST_LINE
+            else:
+                line = f"{summary} {mindcheck_advice(str(result.get('bucket', '')))}{self_harm_line} {OPEN_QUESTION}"
+            self._mindcheck_done = True
+            tts = self._tts()
+            await self.send_event({"type": "assistant.audio.started"})
+            await self.send_event({"type": "assistant.final", "text": line})
+            self.conversation_messages.append({"role": "assistant", "content": line})
+            symptom_note = f" The answers that stood out most: {'; '.join(symptoms)}." if symptoms else ""
+            self.conversation_messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"[System note: the driver just finished a Mind Check ({kind}, score {score}, band {band}, "
+                        f"priority {tier}).{symptom_note} The driver may now ask you anything about depression, anxiety, "
+                        "sleep, stress or this result. Answer in simple, warm Hindi, explain clearly in 3 to 5 short "
+                        "sentences, give one practical step, and end with a gentle question. Do not diagnose, do not "
+                        "name medicines, and do not mention this note.]"
+                    ),
+                }
+            )
+            if not call_doctor:
+                await self._speak_text(tts, line, turn_id)
+                await self.wait_for_playback_done(turn_id)
+                return
+
+            await self.send_event({"type": "healthcare.call.connecting", "mode": CALL_PREF_AI_AGENT})
+            call_task = asyncio.create_task(self._place_doctor_call(score, band))
+            action = "doctor_call_requested"
+            await self._speak_text(tts, line, turn_id)
+            try:
+                call_result = await call_task
+            except DhwaniCallError as exc:
+                action, error = "doctor_call_failed", str(exc)
+                await self._call_failed(tts, line, str(exc), turn_id)
+                return
+            action, call_id = "doctor_call_placed", str(call_result.get("call_id") or "")
+            self._on_call = True
+            await self.send_event(
+                {"type": "healthcare.call.doctor_called", "call_id": call_result.get("call_id"), "status": call_result.get("status")}
+            )
+            await self.wait_for_playback_done(turn_id)
+        except asyncio.CancelledError:
+            logger.info("mindcheck.cancelled session_id=%s turn=%s", self.session_id, turn_id)
+        except Exception as exc:  # noqa: BLE001 - surface any pipeline failure to the client
+            error = error or str(exc)
+            await self.fail("mindcheck", exc)
+        finally:
+            self._log_mindcheck(result, tier, action, call_id, error)
+
+    async def _place_doctor_call(self, score: int, band: str) -> dict:
+        if DOCTOR_CALL_STATIC:
+            logger.info("mindcheck.doctor_call.static number=%s score=%s band=%s", DOCTOR_IVR_NUMBER, score, band)
+            await asyncio.sleep(1.5)
+            return {"call_id": "STATIC-DOCTOR-CALL", "status": "QUEUED"}
+        if not self.settings.doctor_call_ready():
+            raise DhwaniCallError("DHWANI_CALL_API_KEY is not configured")
+        client = DhwaniCallClient(
+            self.settings.dhwani_call_api_key,
+            self.settings.dhwani_call_base_url,
+            self.settings.dhwani_call_agent,
+        )
+        receiver_name = (self.user_profile or {}).get("name", "Driver")
+        return await client.place_call(
+            number=DOCTOR_IVR_NUMBER,
+            receiver_name=receiver_name,
+            user_instructions=MINDCHECK_CALL_INSTRUCTIONS.format(score=score, band=band),
+        )
 
     async def _connect_ai_agent(self, tts, spoken: str, issue_summary: str, turn_id: int) -> None:
         wait_line = spoken or HEALTHCARE_WAIT_LINE
@@ -335,6 +597,7 @@ class VoiceSession:
         )
         # Pause MITRA and ask the driver to confirm the call arrived. The frontend
         # shows the popup and starts the countdown as soon as this arrives.
+        self._on_call = True
         await self.send_event(
             {"type": "healthcare.call.await_confirm", "timeout_ms": HEALTHCARE_CONFIRM_TIMEOUT_MS}
         )
@@ -368,6 +631,7 @@ class VoiceSession:
                 "status": result.get("message"),
             }
         )
+        self._on_call = True
         await self.send_event(
             {"type": "healthcare.call.await_confirm", "timeout_ms": HEALTHCARE_CONFIRM_TIMEOUT_MS}
         )
@@ -382,6 +646,7 @@ class VoiceSession:
         line = spoken or HEALTHCARE_DIALER_LINE
         number = self.settings.human_agent_number or self.settings.healthcare_support_number
         self._healthcare_call_deferred = False
+        self._on_call = True
         await self.send_event({"type": "healthcare.call.open_dialer", "number": number})
         await self.send_event({"type": "healthcare.call.paused", "hint": HEALTHCARE_HUMAN_PAUSE_HINT})
         await self.send_event({"type": "assistant.final", "text": line})
@@ -398,6 +663,25 @@ class VoiceSession:
         )
         await self._speak_text(tts, HEALTHCARE_FAIL_LINE, turn_id)
         await self.wait_for_playback_done(turn_id)
+
+    def _llm(self) -> GeminiLLM:
+        return GeminiLLM(self.settings.gemini_api_key, self.settings.gemini_model)
+
+    def _stt(self) -> ElevenLabsSTT | GeminiSTT:
+        if self.settings.stt_provider == "browser":
+            raise RuntimeError("STT_PROVIDER=browser recognizes speech in the browser; server audio turns are not used")
+        if self.settings.stt_provider == "gemini":
+            return GeminiSTT(self.settings.gemini_api_key, self.settings.gemini_model)
+        return ElevenLabsSTT(self.settings.elevenlabs_api_key, self.settings.elevenlabs_stt_model)
+
+    def _tts(self) -> ElevenLabsTTS | EdgeTTS:
+        if self.settings.tts_provider == "edge":
+            return EdgeTTS(self.settings.edge_tts_voice)
+        return ElevenLabsTTS(
+            self.settings.elevenlabs_api_key,
+            self.settings.elevenlabs_tts_model,
+            self.settings.elevenlabs_tts_voice_id,
+        )
 
     def _dialer_client(self) -> DialerCallClient:
         return DialerCallClient(
@@ -431,6 +715,7 @@ class VoiceSession:
             return
 
         logger.info("healthcare.call.not_received session_id=%s", self.session_id)
+        self._on_call = False
         if self._processing_task is not None and not self._processing_task.done():
             await self.send_event({"type": "turn.busy"})
             return
@@ -453,7 +738,7 @@ class VoiceSession:
         try:
             # Tools disabled here so the "call not received" reply can only speak/ask,
             # never auto-redial without a fresh confirmation.
-            await self.generate_with_gemini(turn_id, allow_tools=False)
+            await self.generate_reply(turn_id, allow_tools=False)
         except asyncio.CancelledError:
             logger.info("healthcare.confirmation.cancelled session_id=%s turn=%s", self.session_id, turn_id)
         except Exception as exc:
@@ -484,24 +769,25 @@ class VoiceSession:
             user_instructions=issue_summary or HEALTHCARE_DEFAULT_INSTRUCTIONS,
         )
 
-    async def synthesize_with_elevenlabs(self, text: str, turn_id: int) -> None:
-        logger.info("pipeline.synthesize_with_elevenlabs.start session_id=%s turn=%s", self.session_id, turn_id)
-        tts = ElevenLabsTTS(
-            self.settings.elevenlabs_api_key,
-            self.settings.elevenlabs_tts_model,
-            self.settings.elevenlabs_tts_voice_id,
+    async def synthesize_speech(self, text: str, turn_id: int) -> None:
+        logger.info(
+            "pipeline.synthesize.start session_id=%s turn=%s provider=%s",
+            self.session_id,
+            turn_id,
+            self.settings.tts_provider,
         )
+        tts = self._tts()
         await self.send_event({"type": "assistant.audio.started"})
         await self._speak_text(tts, text, turn_id)
         await self.wait_for_playback_done(turn_id)
 
-    async def _speak_text(self, tts: ElevenLabsTTS, text: str, turn_id: int) -> None:
+    async def _speak_text(self, tts: ElevenLabsTTS | EdgeTTS, text: str, turn_id: int) -> None:
         chunks = split_tts_text(text)
         for index, chunk in enumerate(chunks, start=1):
             if self._closed:
                 return
             logger.info(
-                "pipeline.synthesize_with_elevenlabs.chunk session_id=%s turn=%s chunk=%s/%s chars=%s",
+                "pipeline.synthesize.chunk session_id=%s turn=%s chunk=%s/%s chars=%s",
                 self.session_id,
                 turn_id,
                 index,
@@ -511,7 +797,7 @@ class VoiceSession:
             pcm_bytes = await tts.synthesize_pcm(chunk)
             pcm_bytes = pad_tts_pcm(pcm_bytes)
             logger.info(
-                "pipeline.synthesize_with_elevenlabs.chunk_done session_id=%s turn=%s chunk=%s bytes=%s",
+                "pipeline.synthesize.chunk_done session_id=%s turn=%s chunk=%s bytes=%s",
                 self.session_id,
                 turn_id,
                 index,
@@ -552,6 +838,8 @@ class VoiceSession:
         await self.send_event({"type": "assistant.audio.done"})
 
     async def send_event(self, payload: dict[str, Any]) -> None:
+        if payload.get("type") in {"assistant.audio.done", "turn.started"}:
+            self._last_activity = time.monotonic()
         if self.ws.closed:
             return
         await self.ws.send_json(payload)
@@ -569,6 +857,8 @@ class VoiceSession:
         self._closed = True
         self.closed_at = datetime.now(timezone.utc)
         logger.info("session.close session_id=%s", self.session_id)
+        if self._idle_task is not None and self._idle_task is not asyncio.current_task():
+            self._idle_task.cancel()
         if self._processing_task is not None and not self._processing_task.done():
             self._processing_task.cancel()
         if self.outgoing_audio_track is not None:
@@ -579,6 +869,14 @@ class VoiceSession:
                 await self.ws.send_json({"type": "closed"})
             finally:
                 await self.ws.close()
+
+
+def is_greeting(text: str) -> bool:
+    """True when the whole utterance is just a hello, e.g. "hello mitra" or "नमस्ते मित्रा जी"."""
+    words = GREETING_TOKEN.findall(text.lower())
+    return any(word in GREETING_WORDS for word in words) and all(
+        word in GREETING_WORDS or word in GREETING_FILLER_WORDS for word in words
+    )
 
 
 def split_tts_text(text: str) -> list[str]:

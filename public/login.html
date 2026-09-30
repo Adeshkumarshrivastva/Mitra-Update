@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/jpeg" href="/assets/Mitra.jpeg">
     <title>MITRA Login</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +15,7 @@
       <section class="login-panel" aria-label="MITRA login">
 
         <div class="login-brand">
-          <div class="mark" aria-hidden="true">M</div>
+          <img class="mark" src="/assets/Mitra.jpeg" alt="MITRA logo">
           <div>
             <h1>MITRA</h1>
             <p>Aapka apna highway saathi</p>
@@ -24,7 +25,7 @@
         <form id="loginForm" class="login-form">
           <label>
             Name
-            <input id="nameInput" name="name" autocomplete="name" placeholder="Rahul" required>
+            <input id="nameInput" name="name" autocomplete="name" placeholder="Adesh" value="Adesh" required>
           </label>
           <label>
             Truck number
@@ -39,7 +40,7 @@
             <input id="pinInput" name="pin" inputmode="numeric" autocomplete="current-password" placeholder="1234" required>
           </label>
           <button class="login-button" type="submit">Start MITRA</button>
-          <p id="loginStatus" class="login-status">Mitra naal gal karo.</p>
+          <p id="loginStatus" class="login-status"></p>
         </form>
 
       </section>

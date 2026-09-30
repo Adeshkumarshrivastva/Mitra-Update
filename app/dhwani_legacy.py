@@ -79,7 +79,7 @@ def env_config():
     return {
         "agent_url": os.environ.get("MITRA_AGENT_WS_URL", "").strip(),
         "agent": os.environ.get("MITRA_AGENT_NAME", "default").strip() or "default",
-        "user_name": os.environ.get("MITRA_USER_NAME", "Rahul").strip() or "Rahul",
+        "user_name": os.environ.get("MITRA_USER_NAME", "Adesh").strip() or "Raushan",
         "greeting": bool_env("MITRA_GREETING", False),
         "ready_timeout": float(os.environ.get("MITRA_READY_TIMEOUT", "15")),
         "reply_timeout": float(os.environ.get("MITRA_REPLY_TIMEOUT", "45")),

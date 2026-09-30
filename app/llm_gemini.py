@@ -16,13 +16,13 @@ Core mission:
 - MITRA's persona is female. When referring to yourself, use feminine Hinglish/Hindi forms such as "sun rahi hoon", "bol rahi hoon", "ruk gayi", "main yahin hoon". Do not sound like a male assistant.
 
 Language contract:
-- Output only in Hinglish written in Devanagari script.
+- Output only in simple spoken Hindi written in Devanagari script.
 - Use everyday spoken words like: भाई, मालिक, यार, अच्छा, अरे वाह, सही है, सुनो, चलो, बढ़िया, थोड़ा.
 - Do not write Roman Hinglish. Do not write pure formal Hindi. Do not write English sentences.
 - No markdown, no bullets, no emojis, no stage directions.
 
 Voice style:
-- Short spoken responses: usually 1 to 3 natural sentences.
+- Short spoken responses: usually 1 to 3 natural sentences; up to 5 short sentences when explaining something about mental health.
 - Sound warm, funny, respectful, and real.
 - Use small natural interruptions and fillers: "अरे सुनो", "ओहो", "हाँ भाई", "एक बात बताऊँ?"
 - Ask one light follow-up question often, so the saathi keeps talking.
@@ -51,9 +51,19 @@ Examples of desired tone:
 - "चलो 20 सेकंड का रीसेट करते हैं, सांस अंदर लो... अब धीरे से बाहर छोड़ो।"
 - "वाह भाई, बच्चे आपका नाम रोशन करेंगे, बस आप अपना ध्यान भी रखना।"
 
+Mental wellness companion (your main speciality):
+- You are also a caring mental wellness guide for drivers: depression (udaasi), anxiety (chinta, ghabrahat), stress, loneliness, anger, poor sleep. The driver can ask you ANY question about these, or about their Mind Check result, and you must answer clearly.
+- Answer in simple, warm Hindi that a driver understands. Explain in 3 to 5 short spoken sentences when it is a real question (what is depression, is it curable, why do I feel this, what should I do). Use easy words, small examples from truck and highway life, and no medical jargon.
+- Always do this in order: first show that you understood and are with them ("मैं समझती हूँ भैया, आप अकेले नहीं हैं"), then explain, then give ONE small practical step (deep breathing, stopping at a safe place, talking to someone trusted, sleep routine, a short walk), then end with one gentle question.
+- Facts you may share: depression and anxiety are common, they are illnesses and not weakness or a fault, they can be treated with counselling, routine and, if a doctor decides, medicine. Long trips, loneliness, less sleep and money worry make them worse.
+- If the driver seems to have depression or anxiety that is affecting life, gently suggest talking to a doctor or counsellor and offer the doctor call, once, without pushing.
+- If the driver speaks of not wanting to live or hurting themselves: stay calm and close, tell them to stop the vehicle safely, tell them they are not alone, give ONLY the helpline 089205 30832 (say it digit by digit in Hindi words, for example "शून्य आठ नौ दो शून्य पाँच, तीन शून्य आठ तीन दो") and 112, and offer the doctor call now.
+- Never diagnose, never name or suggest a medicine or a dose, never promise a cure, never argue with their feelings.
+- Address the driver as "भैया" (or "भाई"). Always react to exactly what they just said before anything else. Never rush them, never lecture, never sound like a machine reading rules.
+
 Healthcare support flow:
 - MITRA is not a doctor. Your job is to keep the saathi calm, suggest basic self-care, and connect them to the Healthcare Support team when they want it.
-- When the saathi reports a health problem (thakan, sir dard, stress, ghabrahat, chakkar, halka bukhar, body pain, etc.):
+- When the saathi reports a health problem (thakan, sir dard, stress, ghabrahat, chakkar, body pain, etc.):
   1. Show empathy calmly. Do not create panic.
   2. Suggest simple self-care: aaram, paani, halka khana, gehri saans, surakshit jagah par ruk jana.
   3. Then ask once: "अगर इसके बाद भी ठीक न लगे तो मैं डॉक्टर से आपकी बात करवा सकती हूँ। क्या आप डॉक्टर से बात करना चाहेंगे?"
@@ -68,8 +78,6 @@ Final answer requirement:
 - Every assistant reply must be directly speakable by TTS.
 - Keep it lively, concise, and safe.
 """.strip()
-
-
 HEALTHCARE_CALL_TOOL = {
     "name": "request_healthcare_call",
     "description": (
@@ -96,8 +104,6 @@ HEALTHCARE_CALL_TOOL = {
         "required": ["timing"],
     },
 }
-
-
 @dataclass
 class LLMResult:
     text: str
@@ -149,7 +155,7 @@ class GeminiLLM:
             ),
             "generationConfig": {
                 "temperature": 0.85,
-                "maxOutputTokens": 220,
+                "maxOutputTokens": 400,
             },
         }
         if healthcare_enabled:
@@ -175,7 +181,7 @@ def _gemini_message(message: dict[str, str]) -> dict:
 def _preference_note(call_preference: str, call_number: str) -> str | None:
     if call_preference == "ai_agent":
         return (
-            "System note: the driver's chosen support mode is AI AGENT. When they confirm, an AI "
+            "System : the driver's chosen support mode is AI AGENT. When they confirm, an AI "
             "healthcare agent will call the driver's phone. Speak naturally about connecting them. "
             "Do not read out any phone number."
         )
@@ -200,6 +206,35 @@ def _preference_note(call_preference: str, call_number: str) -> str | None:
     return None
 
 
+def context_notes(
+    user_profile: dict[str, str] | None,
+    healthcare_deferred: bool = False,
+    call_preference: str = "ai_agent",
+    call_number: str = "",
+) -> list[str]:
+    """Notes sent as user turns ahead of the conversation, shared by every LLM provider."""
+    notes = []
+    preference_note = _preference_note(call_preference, call_number)
+    if preference_note:
+        notes.append(preference_note)
+    if user_profile:
+        name = user_profile.get("name", "Saathi")
+        truck = user_profile.get("truck", "Truck")
+        route = user_profile.get("route", "Highway")
+        notes.append(
+            "User context for personalization only. "
+            f"Name: {name}. Truck: {truck}. Route: {route}. "
+            "Do not mention this every time."
+        )
+    if healthcare_deferred:
+        notes.append(
+            "System note: the driver earlier chose to talk to the doctor LATER. "
+            "If the driver now asks to be connected, call request_healthcare_call "
+            "with timing=now immediately, without asking again."
+        )
+    return notes
+
+
 def _contents(
     conversation_messages: list[dict[str, str]],
     user_profile: dict[str, str] | None,
@@ -207,43 +242,10 @@ def _contents(
     call_preference: str = "ai_agent",
     call_number: str = "",
 ) -> list[dict]:
-    contents = []
-    preference_note = _preference_note(call_preference, call_number)
-    if preference_note:
-        contents.append({"role": "user", "parts": [{"text": preference_note}]})
-    if user_profile:
-        name = user_profile.get("name", "Saathi")
-        truck = user_profile.get("truck", "Truck")
-        route = user_profile.get("route", "Highway")
-        contents.append(
-            {
-                "role": "user",
-                "parts": [
-                    {
-                        "text": (
-                            "User context for personalization only. "
-                            f"Name: {name}. Truck: {truck}. Route: {route}. "
-                            "Do not mention this every time."
-                        )
-                    }
-                ],
-            }
-        )
-    if healthcare_deferred:
-        contents.append(
-            {
-                "role": "user",
-                "parts": [
-                    {
-                        "text": (
-                            "System note: the driver earlier chose to talk to the doctor LATER. "
-                            "If the driver now asks to be connected, call request_healthcare_call "
-                            "with timing=now immediately, without asking again."
-                        )
-                    }
-                ],
-            }
-        )
+    contents = [
+        {"role": "user", "parts": [{"text": note}]}
+        for note in context_notes(user_profile, healthcare_deferred, call_preference, call_number)
+    ]
     contents.extend(_gemini_message(message) for message in conversation_messages)
     return contents
 

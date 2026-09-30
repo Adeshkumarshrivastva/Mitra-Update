@@ -6,7 +6,7 @@ import time
 from fractions import Fraction
 from typing import Awaitable, Callable
 
-from aiortc import RTCIceCandidate, RTCPeerConnection, RTCSessionDescription
+from aiortc import RTCConfiguration, RTCIceCandidate, RTCIceServer, RTCPeerConnection, RTCSessionDescription
 from aiortc.mediastreams import MediaStreamError, MediaStreamTrack
 from aiortc.sdp import candidate_from_sdp
 
@@ -101,11 +101,19 @@ class QueuedAudioTrack(MediaStreamTrack):
         await self._queue.put(None)
 
 
+def _build_configuration(ice_servers: str) -> RTCConfiguration:
+    urls = [url.strip() for url in ice_servers.split(",") if url.strip()]
+    if not urls:
+        return RTCConfiguration(iceServers=[])
+    return RTCConfiguration(iceServers=[RTCIceServer(urls=urls)])
+
+
 async def create_peer_connection(
     on_audio_track: TrackHandler,
     on_state_change: StateHandler,
+    ice_servers: str = "",
 ) -> tuple[RTCPeerConnection, QueuedAudioTrack]:
-    pc = RTCPeerConnection()
+    pc = RTCPeerConnection(configuration=_build_configuration(ice_servers))
     outgoing_track = QueuedAudioTrack()
     pc.addTrack(outgoing_track)
 

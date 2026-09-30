@@ -47,6 +47,18 @@ def pcm_to_wav_bytes(pcm_bytes: bytes, sample_rate: int = STT_SAMPLE_RATE) -> by
     return output.getvalue()
 
 
+def mp3_to_pcm(mp3_bytes: bytes, sample_rate: int = TTS_PCM_SAMPLE_RATE) -> bytes:
+    """Decode MP3 audio (e.g. Edge TTS output) to mono s16 PCM."""
+    resampler = av.AudioResampler(format="s16", layout="mono", rate=sample_rate)
+    chunks: list[bytes] = []
+    with av.open(io.BytesIO(mp3_bytes), format="mp3") as container:
+        for frame in [*container.decode(audio=0), None]:
+            for converted in resampler.resample(frame):
+                samples = np.asarray(converted.to_ndarray(), dtype=np.int16).reshape(-1)
+                chunks.append(samples.tobytes())
+    return b"".join(chunks)
+
+
 def _resample_int16(samples: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
     if source_rate == target_rate or samples.size == 0:
         return samples.astype(np.int16, copy=False)

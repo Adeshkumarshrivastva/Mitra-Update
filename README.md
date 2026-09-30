@@ -1,6 +1,6 @@
 # MITRA Voice Assistant
 
-MITRA is a minimal browser voice app. The browser sends microphone audio over WebRTC, the Python backend transcribes it with ElevenLabs Scribe v2, sends the transcript to Gemini, synthesizes the reply with ElevenLabs TTS, and returns audio over the same WebRTC session.
+MITRA is a minimal browser voice app. The browser sends microphone audio over WebRTC, the Python backend transcribes it (ElevenLabs Scribe v2 or Gemini), sends the transcript to Gemini, synthesizes the reply (ElevenLabs TTS or free Edge TTS), and returns audio over the same WebRTC session.
 
 The UI only talks to the local MITRA server. Provider hosts and keys stay in `.env`.
 
@@ -26,6 +26,21 @@ APP_HOST=0.0.0.0
 APP_PORT=8010
 MITRA_LOGIN_PIN=1234
 ```
+
+### Free setup (no ElevenLabs key)
+
+MITRA can run with only a free Gemini API key from https://aistudio.google.com/apikey:
+
+```env
+STT_PROVIDER=gemini
+TTS_PROVIDER=edge
+EDGE_TTS_VOICE=hi-IN-SwaraNeural
+GEMINI_API_KEY=...
+```
+
+- `STT_PROVIDER=gemini` transcribes the driver's audio with the same Gemini model and key.
+- `TTS_PROVIDER=edge` speaks replies with Microsoft Edge's free online neural voices via `edge-tts` (no key). `hi-IN-SwaraNeural` is female, `hi-IN-MadhurNeural` is male.
+- Both default to `elevenlabs` when unset. Edge TTS uses an unofficial endpoint, so treat it as a development option.
 
 ## Run
 
@@ -132,6 +147,7 @@ Inbound:
 {"type":"offer","sdp":"..."}
 {"type":"ice","candidate":{}}
 {"type":"call_preference","value":"ai_agent"}
+{"type":"transcript","text":"..."}
 {"type":"healthcare.confirm","received":true}
 ```
 
@@ -151,6 +167,10 @@ Outbound:
 {"type":"error","message":"..."}
 {"type":"closed"}
 ```
+
+## Mind Check storage
+
+There is no database. Mind Check results are kept in the browser's localStorage and the `/dashboard` reads them from there.
 
 ## Logs
 

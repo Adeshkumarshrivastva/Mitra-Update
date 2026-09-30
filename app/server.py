@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import json
 import logging
 import sys
@@ -49,6 +50,11 @@ def create_app(settings: Settings) -> web.Application:
             raise web.HTTPFound("/login")
         return web.FileResponse(settings.public_dir / "index.html")
 
+    async def dashboard_page(request: web.Request) -> web.FileResponse:
+        if current_profile(request) is None:
+            raise web.HTTPFound("/login")
+        return web.FileResponse(settings.public_dir / "dashboard.html")
+
     async def login_page(request: web.Request) -> web.FileResponse:
         if current_profile(request) is not None:
             raise web.HTTPFound("/")
@@ -66,7 +72,13 @@ def create_app(settings: Settings) -> web.Application:
 
     async def api_me(request: web.Request) -> web.Response:
         profile = current_profile(request)
-        return web.json_response({"ok": True, "profile": profile.to_json() if profile else None})
+        return web.json_response(
+            {
+                "ok": True,
+                "profile": profile.to_json() if profile else None,
+                "stt_provider": settings.stt_provider,
+            }
+        )
 
     async def websocket_session(request: web.Request) -> web.WebSocketResponse:
         profile = require_profile(request)
@@ -94,9 +106,18 @@ def create_app(settings: Settings) -> web.Application:
         return ws
 
     async def health(_request: web.Request) -> web.Response:
-        return web.json_response({"ok": True, "pipeline": "webrtc", "use_dhwani": settings.use_dhwani})
+        return web.json_response(
+            {"ok": True, "pipeline": "webrtc", "use_dhwani": settings.use_dhwani}
+        )
+
+    async def no_cache(_request: web.Request, response: web.StreamResponse) -> None:
+        # The UI files change often; never let the browser keep an old copy (it showed a stale login page).
+        response.headers["Cache-Control"] = "no-cache"
+
+    app.on_response_prepare.append(no_cache)
 
     app.router.add_get("/", index)
+    app.router.add_get("/dashboard", dashboard_page)
     app.router.add_get("/login", login_page)
     app.router.add_post("/api/login", api_login)
     app.router.add_post("/api/logout", api_logout)
@@ -134,6 +155,10 @@ async def handle_ws_text(session: VoiceSession, raw: str) -> None:
         await session.handle_healthcare_confirmation(bool(payload.get("received")))
     elif message_type == "call_preference":
         session.set_call_preference(str(payload.get("value", "")))
+    elif message_type == "mindcheck.result":
+        await session.handle_mindcheck_result(payload)
+    elif message_type == "transcript":
+        await session.handle_browser_transcript(str(payload.get("text", "")))
     elif message_type == "end":
         await session.close()
     elif message_type == "ping":
@@ -177,3 +202,12 @@ def main() -> None:
         asyncio.run(run_server(settings))
     except KeyboardInterrupt:
         print("\nMITRA stopped", flush=True)
+    except OSError as exc:
+        # 10048 is WSAEADDRINUSE on Windows.
+        if exc.errno not in {errno.EADDRINUSE, 10048}:
+            raise
+        raise SystemExit(
+            f"MITRA could not start: port {settings.app_port} is already in use.\n"
+            "Another MITRA server is probably still running. Stop it with Ctrl+C in its terminal, "
+            "or set a different APP_PORT in .env."
+        )

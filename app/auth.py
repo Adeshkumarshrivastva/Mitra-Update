@@ -28,8 +28,18 @@ class UserProfile:
         }
 
 
+def _bearer_token(request: web.Request) -> str | None:
+    header = request.headers.get("Authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[len("Bearer "):].strip() or None
+    return None
+
+
 def current_profile(request: web.Request) -> UserProfile | None:
-    token = request.cookies.get(COOKIE_NAME)
+    # Native clients (React Native) have no automatic cookie jar for a WS
+    # upgrade request, so they send the token as a header instead; browsers
+    # keep using the httponly cookie exactly as before.
+    token = _bearer_token(request) or request.cookies.get(COOKIE_NAME)
     if not token:
         return None
     sessions: dict[str, UserProfile] = request.app["auth_sessions"]
@@ -66,7 +76,9 @@ def create_login_response(request: web.Request, payload: dict[str, Any], expecte
         login_at=datetime.now(timezone.utc),
     )
     request.app["auth_sessions"][token] = profile
-    response = web.json_response({"ok": True, "profile": profile.to_json()})
+    # `token` is also returned in the body (not just Set-Cookie) so a client
+    # with no cookie jar (React Native) can carry it as a Bearer header.
+    response = web.json_response({"ok": True, "profile": profile.to_json(), "token": token})
     response.set_cookie(
         COOKIE_NAME,
         token,

@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/jpeg" href="/assets/Mitra.jpeg">
     <title>MITRA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +17,7 @@
         <!-- Full-width header -->
         <header class="topbar">
           <div class="brand-row">
-            <div class="mark" aria-hidden="true">M</div>
+            <img class="mark" src="/assets/Mitra.jpeg" alt="MITRA logo">
             <div>
               <h1>MITRA</h1>
               <p id="profileLine">Aapka apna highway saathi</p>
@@ -96,6 +97,10 @@
       </section>
     </main>
 
+    <div id="mindcheck" class="mindcheck" hidden>
+      <div id="mindcheckBody" class="mindcheck-card"></div>
+    </div>
+
     <div id="callModal" class="call-modal" hidden>
       <div class="call-modal-card" role="dialog" aria-modal="true" aria-labelledby="callModalText">
         <div class="call-modal-icon" aria-hidden="true">
@@ -122,5 +127,10 @@
     </div>
 
     <script src="./app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script src="./mindcheck-data.js"></script>
+    <script src="./mindcheck-report.js"></script>
+    <script src="./mindcheck-store.js"></script>
+    <script src="./mindcheck.js"></script>
   </body>
 </html>

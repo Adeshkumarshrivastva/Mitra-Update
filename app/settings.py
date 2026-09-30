@@ -10,6 +10,16 @@ PUBLIC_DIR = BASE_DIR / "public"
 LOG_DIR = BASE_DIR / "logs"
 ENV_PATH = BASE_DIR / ".env"
 
+# Doctors' line. Mind Check escalation always places the IVR/AI-agent call to this number (not configurable).
+DOCTOR_IVR_NUMBER = "8920530832"
+
+# Static for now: no Dhwani request is made, the doctor call is simulated. Flip to False when Dhwani is wired in.
+DOCTOR_CALL_STATIC = True
+
+STT_PROVIDERS = {"browser", "elevenlabs", "gemini"}
+TTS_PROVIDERS = {"elevenlabs", "edge"}
+LLM_PROVIDERS = {"gemini"}
+
 
 def load_env(path: Path = ENV_PATH) -> None:
     if not path.exists():
@@ -53,6 +63,7 @@ class Settings:
     gemini_model: str
     app_host: str
     app_port: int
+    ice_servers: str
     login_pin: str
     healthcare_enabled: bool
     dhwani_call_api_key: str
@@ -67,6 +78,10 @@ class Settings:
     dialer_bridge_url: str
     dialer_caller_id: str
     human_agent_number: str
+    stt_provider: str
+    tts_provider: str
+    edge_tts_voice: str
+    llm_provider: str
     public_dir: Path = PUBLIC_DIR
     log_dir: Path = LOG_DIR
 
@@ -82,6 +97,10 @@ class Settings:
             gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite",
             app_host=os.getenv("APP_HOST", "0.0.0.0").strip() or "0.0.0.0",
             app_port=env_int("APP_PORT", 8000),
+            # Comma-separated STUN/TURN URIs. Browser clients on the same LAN
+            # as the server got away with none; a phone on cellular data needs
+            # at least a STUN server to gather a usable ICE candidate.
+            ice_servers=os.getenv("ICE_SERVERS", "stun:stun.l.google.com:19302").strip(),
             login_pin=os.getenv("MITRA_LOGIN_PIN", "1234").strip(),
             healthcare_enabled=env_bool("HEALTHCARE_ENABLED", True),
             dhwani_call_api_key=os.getenv("DHWANI_CALL_API_KEY", "").strip(),
@@ -111,10 +130,17 @@ class Settings:
             dialer_caller_id=os.getenv("DIALER_CALLER_ID", "").strip(),
             # Human agent connected into the driver's call for the "Human Agent" preference.
             human_agent_number=os.getenv("HUMAN_AGENT_NUMBER", "6265833992").strip() or "6265833992",
+            stt_provider=os.getenv("STT_PROVIDER", "elevenlabs").strip().lower() or "elevenlabs",
+            tts_provider=os.getenv("TTS_PROVIDER", "elevenlabs").strip().lower() or "elevenlabs",
+            edge_tts_voice=os.getenv("EDGE_TTS_VOICE", "hi-IN-SwaraNeural").strip() or "hi-IN-SwaraNeural",
+            llm_provider=os.getenv("LLM_PROVIDER", "gemini").strip().lower() or "gemini",
         )
 
     def healthcare_call_ready(self) -> bool:
         return self.healthcare_enabled and bool(self.dhwani_call_api_key) and bool(self.healthcare_driver_number)
+
+    def doctor_call_ready(self) -> bool:
+        return self.healthcare_enabled and bool(self.dhwani_call_api_key)
 
     def human_call_ready(self) -> bool:
         # The click_to_call bridge is authenticated with the Bearer API token.
@@ -127,18 +153,26 @@ class Settings:
         )
 
     def require_voice_pipeline(self) -> None:
+        if self.stt_provider not in STT_PROVIDERS:
+            raise RuntimeError(f"STT_PROVIDER must be one of: {', '.join(sorted(STT_PROVIDERS))}")
+        if self.tts_provider not in TTS_PROVIDERS:
+            raise RuntimeError(f"TTS_PROVIDER must be one of: {', '.join(sorted(TTS_PROVIDERS))}")
+        if self.llm_provider not in LLM_PROVIDERS:
+            raise RuntimeError(f"LLM_PROVIDER must be one of: {', '.join(sorted(LLM_PROVIDERS))}")
+
         missing = []
-        if not self.elevenlabs_api_key:
+        if "elevenlabs" in {self.stt_provider, self.tts_provider} and not self.elevenlabs_api_key:
             missing.append("ELEVENLABS_API_KEY")
-        if not self.elevenlabs_stt_model:
+        if self.stt_provider == "elevenlabs" and not self.elevenlabs_stt_model:
             missing.append("ELEVENLABS_STT_MODEL")
-        if not self.elevenlabs_tts_model:
+        if self.tts_provider == "elevenlabs" and not self.elevenlabs_tts_model:
             missing.append("ELEVENLABS_TTS_MODEL")
-        if not self.elevenlabs_tts_voice_id:
+        if self.tts_provider == "elevenlabs" and not self.elevenlabs_tts_voice_id:
             missing.append("ELEVENLABS_TTS_VOICE_ID")
-        if not self.gemini_api_key:
+        uses_gemini = "gemini" in {self.llm_provider, self.stt_provider}
+        if uses_gemini and not self.gemini_api_key:
             missing.append("GEMINI_API_KEY")
-        if not self.gemini_model:
+        if uses_gemini and not self.gemini_model:
             missing.append("GEMINI_MODEL")
 
         if missing:

@@ -60,6 +60,11 @@
   let callDeadline = 0;
   let callTimerInterval = null;
 
+  // STT_PROVIDER=browser: Chrome/Edge recognize speech and only the text goes to the server.
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let browserStt = false;
+  let recognition = null;
+
   function setMode(mode, status, hint) {
     document.body.dataset.mode = mode;
     statusText.textContent = status;
@@ -93,6 +98,10 @@
     const name = payload.profile.name || "Saathi";
     const route = payload.profile.route || "Highway";
     profileLine.textContent = `${name} - ${route}`;
+    browserStt = payload.stt_provider === "browser";
+    if (browserStt && !SpeechRecognitionApi) {
+      setMode("error", "Browser not supported", "Speech recognition ke liye latest Chrome ya Edge use karo.");
+    }
   }
 
   async function ensureSession() {
@@ -193,6 +202,23 @@
     }
   }
 
+  // Called by mindcheck.js once the report is shown: MITRA speaks the verdict (and calls the doctors if it is bad).
+  window.mitraDeliverMindcheck = async (result) => {
+    try {
+      conversationActive = true;
+      await ensureSession();
+      sendSignal({ type: "call_preference", value: "ai_agent" });
+      lockPreference(true);
+      await resumeAudio();
+      busy = true;
+      sendSignal({ type: "mindcheck.result", ...result });
+      setMode("thinking", "Thinking", "MITRA aapki report dekh rahi hai.");
+    } catch (error) {
+      console.error("[MITRA] mindcheck handoff failed", error);
+      resetSessionState("Mic issue", error.message || "Voice session start nahi hua.", "error");
+    }
+  };
+
   async function beginListening(fromBargeIn) {
     if (!conversationActive || listening || busy || speaking) return;
     await ensureSession();
@@ -203,9 +229,61 @@
     turnStartedAt = Date.now();
     lastVoiceAt = 0;
     bargeStartedAt = 0;
-    sendSignal({ type: "turn.start" });
+    if (browserStt) {
+      startRecognition();
+    } else {
+      sendSignal({ type: "turn.start" });
+    }
     setMode("listening", "Listening", fromBargeIn ? "Haan bolo, MITRA ruk gaya." : "Seedha bolna shuru karo, MITRA sun raha hai.");
-    startIdleRefresh();
+    if (!browserStt) startIdleRefresh();
+  }
+
+  function startRecognition() {
+    abortRecognition();
+    const current = new SpeechRecognitionApi();
+    let heardText = "";
+    current.lang = "hi-IN";
+    current.continuous = false;
+    current.interimResults = false;
+    current.maxAlternatives = 1;
+    current.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        if (event.results[i].isFinal) heardText += ` ${event.results[i][0].transcript}`;
+      }
+    };
+    current.onerror = (event) => {
+      console.debug("[MITRA] speech recognition error", event.error);
+      const fatal = {
+        "not-allowed": "Mic ya speech recognition ki permission allow karo.",
+        "service-not-allowed": "Browser ne speech recognition allow nahi kiya.",
+        "audio-capture": "Mic nahi mila. Mic check karo.",
+        network: "Speech recognition ke liye internet chahiye.",
+        "language-not-supported": "Is browser me Hindi speech recognition nahi hai.",
+      }[event.error];
+      if (fatal) resetSessionState("Mic issue", fatal, "error");
+    };
+    current.onend = () => {
+      if (recognition !== current) return;
+      recognition = null;
+      if (!listening) return;
+      listening = false;
+      const text = heardText.trim();
+      if (!text) {
+        if (conversationActive) window.setTimeout(() => beginListening(false), 250);
+        return;
+      }
+      busy = true;
+      sendSignal({ type: "transcript", text });
+      setMode("thinking", "Thinking", "MITRA ne suna. Ab jawab bana raha hai.");
+    };
+    recognition = current;
+    current.start();
+  }
+
+  function abortRecognition() {
+    const current = recognition;
+    recognition = null;
+    if (current) current.abort();
   }
 
   async function resumeAudio() {
@@ -223,6 +301,7 @@
       const now = Date.now();
 
       if (listening) {
+        if (browserStt) return;
         if (volume > VOLUME_THRESHOLD) {
           if (!heardVoice) {
             heardVoice = true;
@@ -332,6 +411,7 @@
     listening = false;
     busy = false;
     clearIdleRefresh();
+    abortRecognition();
     if (maxCaptureTimer) window.clearTimeout(maxCaptureTimer);
     maxCaptureTimer = null;
     setMode("idle", "Paused", hint || "Aap baat kar lijiye. Mic tap karke MITRA ko wapas bulayein.");
@@ -342,6 +422,7 @@
     listening = false;
     busy = false;
     clearIdleRefresh();
+    abortRecognition();
     if (maxCaptureTimer) window.clearTimeout(maxCaptureTimer);
     maxCaptureTimer = null;
     clearCallTimer();
@@ -361,6 +442,7 @@
     listening = false;
     busy = false;
     clearIdleRefresh();
+    abortRecognition();
     if (maxCaptureTimer) window.clearTimeout(maxCaptureTimer);
     maxCaptureTimer = null;
     clearCallTimer();
@@ -481,6 +563,10 @@
       enterQuietPause(payload.hint);
       return;
     }
+    if (payload.type === "healthcare.call.doctor_called") {
+      setMode("speaking", "Doctor ko call lagi", "Doctors ko call laga di gayi hai, wo aapse sampark karenge.");
+      return;
+    }
     if (payload.type === "healthcare.call.deferred") {
       setMode("speaking", "Reminder set", "Jab aap kahenge, MITRA doctor se baat karwa degi.");
       return;
@@ -496,7 +582,8 @@
     }
     if (payload.type === "assistant.final") {
       addTranscript("mitra", payload.text);
-      setMode("thinking", "Voice ready", "MITRA ab bolne wala hai.");
+      // Streamed replies start speaking before the final text arrives.
+      if (!speaking) setMode("thinking", "Voice ready", "MITRA ab bolne wala hai.");
       return;
     }
     if (payload.type === "assistant.audio.started") {
@@ -562,6 +649,7 @@
   function resetSessionState(status = "Tap to start", hint = "Mic tap karo jab baat karni ho.", mode = "idle") {
     stopAudioMonitor();
     clearIdleRefresh();
+    abortRecognition();
     if (maxCaptureTimer) window.clearTimeout(maxCaptureTimer);
     maxCaptureTimer = null;
     conversationActive = false;
